@@ -1,69 +1,76 @@
-import Image from "next/image";
+import Link from "next/link";
+import { HeroBackdrop } from "@/components/command/HeroBackdrop";
+import { LifelineMark } from "@/components/command/Header";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-surface-base">
+      <HeroBackdrop />
+
+      <div className="relative z-10 flex flex-1 flex-col">
+        <header className="flex items-center gap-3 px-6 py-5 sm:px-10">
+          <LifelineMark size={28} />
+          <span className="text-[15px] font-semibold tracking-[0.02em] text-text-primary">Lifeline</span>
+          <span className="ml-auto rounded-full border border-hairline px-3 py-1 text-[11px] tracking-[0.14em] text-text-tertiary uppercase">
+            Simulation environment
+          </span>
+        </header>
+
+        <div className="flex flex-1 items-center px-6 sm:px-10">
+          <div className="max-w-3xl">
+            <p className="text-[12px] tracking-[0.22em] text-accent uppercase">Disaster Response Intelligence</p>
+            <h1 className="mt-4 text-[clamp(3rem,9vw,6.5rem)] leading-[0.92] font-semibold tracking-[-0.03em] text-text-primary">
+              LIFELINE
+            </h1>
+            <p className="mt-5 max-w-xl text-[clamp(1.05rem,2.2vw,1.5rem)] leading-snug text-text-secondary">
+              Find the safest path that still exists.
+            </p>
+            <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-text-tertiary">
+              In a disaster, people don’t need more information. They need a route that is still open, transport that
+              fits their needs, a shelter with room, and medicine within reach — all at once. Lifeline keeps those
+              relationships in a live graph and recomputes the answer every time the world changes.
+            </p>
+
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Link
+                href="/command?demo=1"
+                className="rounded-[var(--radius-md)] bg-accent px-6 py-3.5 text-[14px] font-semibold text-surface-base transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base focus-visible:outline-none"
+              >
+                Run flood demo
+              </Link>
+              <Link
+                href="/command"
+                className="rounded-[var(--radius-md)] border border-hairline-strong px-6 py-3.5 text-[14px] font-semibold text-text-primary transition-colors hover:border-accent/60 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              >
+                Enter disaster command center
+              </Link>
+            </div>
+
+            <dl className="mt-12 grid max-w-2xl grid-cols-2 gap-x-8 gap-y-4 border-t border-hairline pt-6 sm:grid-cols-4">
+              {[
+                ["20", "locations"],
+                ["26", "roads & bridges"],
+                ["7", "responders"],
+                ["4", "shelters"],
+              ].map(([value, label]) => (
+                <div key={label}>
+                  <dt className="tabular text-2xl font-semibold text-text-primary">{value}</dt>
+                  <dd className="text-[11px] tracking-[0.14em] text-text-tertiary uppercase">{label}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+
+        <footer className="px-6 pb-6 sm:px-10">
+          <p className="max-w-3xl text-[12px] leading-relaxed text-text-tertiary">
+            Lifeline is decision-support for disaster-response coordination, not an authoritative emergency service.
+            All locations, resources and incidents shown are synthetic simulation data. Conditions may change. Follow
+            official emergency instructions when available, and call local emergency services for immediate
+            life-threatening danger.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        </footer>
+      </div>
+    </main>
   );
 }

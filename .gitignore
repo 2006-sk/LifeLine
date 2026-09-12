@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Third-party Claude Code skill packages (installed via `npx skills add`).
+# Reinstallable from skills-lock.json; not our source.
+.claude/skills/

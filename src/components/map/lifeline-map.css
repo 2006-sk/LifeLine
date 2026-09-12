@@ -1,0 +1,609 @@
+/* ------------------------------------------------------------------ *
+ * Lifeline — map chrome, DOM markers, hover card and legend.
+ *
+ * Every colour here is a CSS custom property with a hard fallback, so the
+ * map renders correctly before the design system lands and re-themes for
+ * free once it does.
+ * ------------------------------------------------------------------ */
+
+.lfl-map-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  overflow: hidden;
+  background: var(--bg-base, #07090c);
+  color: var(--text-primary, #e8edf2);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  isolation: isolate;
+}
+
+.lfl-map-root:focus-visible {
+  outline: 2px solid var(--accent, #35d6ff);
+  outline-offset: -2px;
+}
+
+.lfl-map-surface {
+  position: absolute;
+  inset: 0;
+}
+
+/* Vignette: pushes the eye to the middle of the operations area. */
+.lfl-map-root::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+.lfl-map-root .maplibregl-canvas:focus {
+  outline: none;
+}
+
+.lfl-map-root .maplibregl-ctrl-attrib,
+.lfl-map-root .maplibregl-ctrl-attrib a {
+  background: transparent;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 40%, transparent);
+  font-size: 10px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Phase overlays
+ * ------------------------------------------------------------------ */
+
+.lfl-scan {
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  z-index: 2;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 300deg,
+    color-mix(in srgb, var(--accent, #35d6ff) 16%, transparent) 352deg,
+    transparent 360deg
+  );
+  animation: lfl-sweep 2.4s linear infinite;
+  mix-blend-mode: screen;
+}
+
+.lfl-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  /* Base state is invisible; the keyframes below do the whole flash and the
+     element simply sits inert once they finish. No timer, no state. */
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--danger, #ff4d5e) 26%, transparent),
+    transparent 70%
+  );
+  animation: lfl-flash 0.9s ease-out 2;
+}
+
+.lfl-status {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--bg-base, #07090c) 82%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 78%, transparent);
+}
+
+.lfl-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.lfl-status[data-phase="searching"] { color: var(--accent, #35d6ff); }
+.lfl-status[data-phase="searching"] .lfl-status-dot { animation: lfl-blink 0.9s ease-in-out infinite; }
+.lfl-status[data-phase="route-found"] { color: var(--safe, #2ee6a8); }
+.lfl-status[data-phase="route-broken"] { color: var(--danger, #ff4d5e); }
+
+/* ------------------------------------------------------------------ *
+ * Markers — shared
+ * ------------------------------------------------------------------ */
+
+.lfl-marker {
+  --lfl-marker-tint: var(--text-primary, #e8edf2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--lfl-marker-tint);
+  line-height: 1;
+  white-space: nowrap;
+  transition: filter 160ms ease;
+}
+
+.lfl-marker:focus-visible {
+  outline: 2px solid var(--accent, #35d6ff);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* MapLibre writes `opacity` and `transform` as INLINE styles on the marker
+   root every frame, so anything we set on the root itself loses. State styling
+   therefore targets the children. */
+.lfl-marker > * { transition: opacity 160ms ease, transform 160ms ease; }
+.lfl-marker.is-dim > * { opacity: 0.35; }
+.lfl-marker.is-selected { z-index: 5; }
+.lfl-marker.is-selected .lfl-pin { transform: scale(1.14); }
+
+.lfl-glyph { display: block; }
+
+.lfl-pin {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--lfl-marker-tint) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-base, #07090c) 86%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.lfl-marker.is-selected .lfl-pin {
+  border-color: var(--accent, #35d6ff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #35d6ff) 30%, transparent), 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Labels float ABOVE the pin; place names sit BELOW their point, so the two
+   never fight for the same pixels. */
+.lfl-chip,
+.lfl-card {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--bg-base, #07090c) 96%, var(--text-primary, #e8edf2));
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 82%, transparent);
+  pointer-events: none;
+}
+
+.lfl-card { display: grid; gap: 3px; min-width: 88px; }
+.lfl-card-title { font-size: 10px; font-weight: 600; }
+.lfl-card-meta {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 62%, transparent);
+}
+
+.lfl-capacity {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-primary, #e8edf2) 16%, transparent);
+  overflow: hidden;
+}
+
+.lfl-capacity-fill {
+  display: block;
+  height: 100%;
+  background: var(--safe, #2ee6a8);
+  transition: width 240ms ease;
+}
+
+.lfl-flag {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--danger, #ff4d5e);
+  color: var(--bg-base, #07090c);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.lfl-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border-radius: 4px;
+  border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  background: var(--bg-base, #07090c);
+  font-size: 8px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 88%, transparent);
+}
+
+.lfl-badge--wheelchair { color: var(--accent, #35d6ff); font-size: 9px; }
+
+/* A struck-out glyph, not just a dimmer one. */
+.lfl-strike {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--danger, #ff4d5e);
+  transform: rotate(-38deg);
+}
+
+/* ------------------------------------------------------------------ *
+ * Markers — per type
+ * ------------------------------------------------------------------ */
+
+.lfl-marker--location { --lfl-marker-tint: color-mix(in srgb, var(--text-primary, #e8edf2) 52%, transparent); }
+
+.lfl-loc-dot {
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text-primary, #e8edf2) 55%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-base, #07090c) 80%, transparent);
+}
+
+/* Dot-only variant: the point is anchored on the dot itself. */
+.lfl-marker--location-dot .lfl-loc-dot {
+  position: static;
+  transform: none;
+}
+
+.lfl-loc-name {
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px var(--bg-base, #07090c), 0 0 6px var(--bg-base, #07090c);
+}
+
+.lfl-loc--watch .lfl-loc-dot { background: var(--warn, #f5a524); }
+.lfl-loc--evacuating .lfl-loc-dot { background: var(--danger, #ff4d5e); }
+.lfl-loc--evacuating .lfl-loc-name { color: color-mix(in srgb, var(--danger, #ff4d5e) 70%, var(--text-primary, #e8edf2)); }
+.lfl-marker--location.is-selected .lfl-loc-name { color: var(--accent, #35d6ff); }
+
+.lfl-marker--family { --lfl-marker-tint: var(--danger, #ff4d5e); }
+
+.lfl-pulse-ring {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  margin: 0 0 -13px -13px;
+  border-radius: 50%;
+  border: 2px solid var(--danger, #ff4d5e);
+  animation: lfl-pulse 2.6s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  pointer-events: none;
+}
+
+.lfl-marker--shelter { --lfl-marker-tint: var(--safe, #2ee6a8); }
+.lfl-marker--shelter.is-full,
+.lfl-marker--shelter.is-closed {
+  --lfl-marker-tint: color-mix(in srgb, var(--text-primary, #e8edf2) 38%, transparent);
+  filter: saturate(0.15);
+}
+.lfl-marker--shelter.is-full .lfl-capacity-fill { background: var(--danger, #ff4d5e); }
+
+.lfl-marker--care { --lfl-marker-tint: #7ecbff; }
+.lfl-marker--care.is-limited > * { opacity: 0.72; }
+.lfl-marker--care.is-closed { filter: saturate(0.1); }
+.lfl-marker--care.is-closed > * { opacity: 0.42; }
+
+.lfl-marker--volunteer { --lfl-marker-tint: var(--warn, #f5a524); }
+.lfl-marker--volunteer .lfl-pin { width: 24px; height: 24px; border-radius: 50%; }
+.lfl-marker--volunteer.is-idle { filter: saturate(0.2); }
+.lfl-marker--volunteer.is-idle > * { opacity: 0.45; }
+
+.lfl-marker--blocked { --lfl-marker-tint: var(--danger, #ff4d5e); }
+
+.lfl-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--danger, #ff4d5e);
+  background: color-mix(in srgb, var(--bg-base, #07090c) 82%, transparent);
+  color: var(--danger, #ff4d5e);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.lfl-marker--hazard {
+  gap: 5px;
+  padding: 3px 8px 3px 5px;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--lfl-marker-tint) 60%, transparent);
+  background: color-mix(in srgb, var(--bg-base, #07090c) 72%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.lfl-hz-glyph { display: inline-flex; animation: lfl-breathe 2.8s ease-in-out infinite; }
+
+.lfl-hz-name {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lfl-hz--flood { --lfl-marker-tint: #4fa3f0; }
+.lfl-hz--landslide { --lfl-marker-tint: var(--warn, #f5a524); }
+.lfl-hz--structural { --lfl-marker-tint: var(--danger, #ff4d5e); }
+.lfl-hz--fire { --lfl-marker-tint: #ff7a2f; }
+.lfl-hz--debris { --lfl-marker-tint: var(--warn, #f5a524); }
+
+/* ------------------------------------------------------------------ *
+ * Hover card (React overlay — never a maplibre symbol layer)
+ * ------------------------------------------------------------------ */
+
+.lfl-tip {
+  position: absolute;
+  z-index: 7;
+  min-width: 172px;
+  max-width: 260px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  /* Fully opaque: markers sit directly underneath and would otherwise bleed
+     through the card and make the values hard to read. */
+  background: color-mix(in srgb, var(--bg-base, #07090c) 94%, var(--text-primary, #e8edf2));
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  color: var(--text-primary, #e8edf2);
+  animation: lfl-fade-in 120ms ease-out;
+}
+
+.lfl-tip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lfl-tip-title { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+.lfl-tip-kind {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 50%, transparent);
+}
+
+.lfl-tip-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lfl-tip-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.lfl-tip-status[data-tone="safe"] { color: var(--safe, #2ee6a8); }
+.lfl-tip-status[data-tone="warn"] { color: var(--warn, #f5a524); }
+.lfl-tip-status[data-tone="danger"] { color: var(--danger, #ff4d5e); }
+.lfl-tip-status[data-tone="neutral"] { color: color-mix(in srgb, var(--text-primary, #e8edf2) 62%, transparent); }
+
+.lfl-tip-rows { display: grid; gap: 3px; margin-top: 8px; }
+
+.lfl-tip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10.5px;
+}
+
+.lfl-tip-k {
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 52%, transparent);
+  letter-spacing: 0.02em;
+}
+
+.lfl-tip-v { font-variant-numeric: tabular-nums; text-align: right; }
+
+.lfl-tip-note {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  font-size: 10px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 66%, transparent);
+  white-space: normal;
+}
+
+/* ------------------------------------------------------------------ *
+ * Legend
+ * ------------------------------------------------------------------ */
+
+.lfl-legend {
+  display: grid;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--bg-base, #07090c) 88%, transparent);
+  color: var(--text-primary, #e8edf2);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  font-size: 11px;
+}
+
+.lfl-legend-group { display: grid; gap: 5px; }
+
+.lfl-legend-title {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 45%, transparent);
+}
+
+.lfl-legend-item { display: flex; align-items: center; gap: 8px; }
+
+.lfl-legend-key {
+  flex: 0 0 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+}
+
+.lfl-legend-label { color: color-mix(in srgb, var(--text-primary, #e8edf2) 80%, transparent); }
+
+.lfl-legend-line { display: block; width: 26px; height: 0; border-top-style: solid; }
+.lfl-legend-line--route { border-top-width: 3px; border-top-color: var(--accent, #35d6ff); box-shadow: 0 0 8px var(--accent, #35d6ff); }
+.lfl-legend-line--pickup { border-top-width: 2px; border-top-style: dashed; border-top-color: var(--warn, #f5a524); }
+.lfl-legend-line--alt { border-top-width: 1.5px; border-top-style: dashed; border-top-color: color-mix(in srgb, var(--accent, #35d6ff) 30%, transparent); }
+.lfl-legend-line--blocked { border-top-width: 2px; border-top-style: dashed; border-top-color: var(--danger, #ff4d5e); }
+.lfl-legend-line--road { border-top-width: 2px; border-top-color: var(--map-road, #4e6076); }
+.lfl-legend-line--foot { border-top-width: 2px; border-top-style: dotted; border-top-color: var(--map-road, #4e6076); }
+.lfl-legend-line--river { border-top-width: 4px; border-top-color: var(--map-river, #1e5f96); }
+
+.lfl-legend-swatch { display: block; width: 18px; height: 12px; border-radius: 3px; border: 1px dashed currentColor; }
+.lfl-legend-swatch--hazard { color: #4fa3f0; background: color-mix(in srgb, #4fa3f0 22%, transparent); }
+
+.lfl-legend-glyph { display: inline-flex; align-items: center; justify-content: center; }
+.lfl-legend-glyph--family { color: var(--danger, #ff4d5e); }
+.lfl-legend-glyph--shelter { color: var(--safe, #2ee6a8); }
+.lfl-legend-glyph--full { color: color-mix(in srgb, var(--text-primary, #e8edf2) 40%, transparent); }
+.lfl-legend-glyph--care { color: #7ecbff; }
+.lfl-legend-glyph--volunteer { color: var(--warn, #f5a524); }
+.lfl-legend-glyph--idle { color: var(--warn, #f5a524); opacity: 0.4; }
+
+/* ------------------------------------------------------------------ *
+ * WebGL-unavailable fallback
+ * ------------------------------------------------------------------ */
+
+.lfl-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow: auto;
+  background: var(--bg-base, #07090c);
+  color: var(--text-primary, #e8edf2);
+  font-size: 12px;
+}
+
+.lfl-fallback-title { font-size: 13px; font-weight: 600; }
+
+.lfl-fallback-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 60%, transparent);
+}
+
+.lfl-fallback-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+
+.lfl-fallback-step {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+}
+
+.lfl-fallback-idx {
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 45%, transparent);
+}
+
+.lfl-fallback-via {
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 62%, transparent);
+}
+
+.lfl-fallback-hazard { color: var(--warn, #f5a524); }
+
+.lfl-fallback-btn {
+  align-self: flex-start;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion
+ * ------------------------------------------------------------------ */
+
+@keyframes lfl-pulse {
+  0% { transform: scale(0.55); opacity: 0.75; }
+  70% { transform: scale(2.3); opacity: 0; }
+  100% { transform: scale(2.3); opacity: 0; }
+}
+
+@keyframes lfl-sweep {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes lfl-flash {
+  0% { opacity: 0; }
+  22% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes lfl-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes lfl-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes lfl-fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lfl-map-root *,
+  .lfl-map-root *::before,
+  .lfl-map-root *::after,
+  .lfl-marker *,
+  .lfl-tip {
+    animation: none !important;
+    transition: none !important;
+  }
+  .lfl-pulse-ring { opacity: 0.35; transform: scale(1.35); }
+  .lfl-scan { display: none; }
+  .lfl-flash { opacity: 0.5; }
+}
