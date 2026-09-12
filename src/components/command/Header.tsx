@@ -311,9 +311,9 @@ function SimButton({
   );
 }
 
-export function LifelineMark({ size = 30 }: { size?: number }) {
+export function LifelineMark({ size = 30, className }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true" className={className}>
       <path
         d="M3 20.5h6.2l2.6-8.4 3.6 13.2 3.4-17 2.7 12.2h7.6"
         stroke="var(--color-accent)"

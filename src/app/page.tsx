@@ -32,18 +32,21 @@ export default function Home() {
         {/* Masthead. The hairline breaks the page margin and runs off the right
             edge into the plate -- the one deliberate escape from the grid. */}
         <header className="lfl-rise pt-7 sm:pt-9">
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-            <div className="flex items-center gap-3">
-              <LifelineMark size={26} />
-              <span className="text-[clamp(1.05rem,1.6vw,1.35rem)] leading-none font-semibold tracking-[0.3em] text-text-primary">
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <LifelineMark size={26} className="h-9 w-9 sm:h-11 sm:w-11 lg:h-14 lg:w-14" />
+              {/* Display-scale wordmark. The negative right margin cancels the
+                  trailing letter-space so the mark still sits flush to the
+                  page margin optically, not just mathematically. */}
+              <span className="-mr-[0.24em] text-[clamp(1.9rem,4.4vw,3.25rem)] leading-none font-semibold tracking-[0.24em] text-text-primary">
                 LIFELINE
               </span>
             </div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-text-tertiary uppercase">
+            <p className="pb-1.5 font-mono text-[10px] tracking-[0.2em] text-text-tertiary uppercase">
               Simulation environment · Bagmati West<span className="hidden sm:inline"> · {sheetRef}</span>
             </p>
           </div>
-          <div className="mt-5 -mr-6 border-t border-hairline sm:-mr-10 lg:-mr-14" />
+          <div className="mt-6 -mr-6 border-t border-hairline sm:-mr-10 lg:-mr-14" />
         </header>
 
         {/* Hero. Headline hangs on the page margin; the lede and the actions
