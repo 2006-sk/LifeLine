@@ -1,634 +1,600 @@
-# Lifeline
+# LIFELINE
 
-> **Find the safest path that still exists.**
+**Find the safest path that still exists.**
 
-A graph-native disaster-response system. Lifeline holds a district — roads,
-bridges, shelters, clinics, medicine, vehicles, volunteers, households and
-hazards — as one connected world inside **Neo4j**, and recomputes a family's
-whole escape plan every time any relationship in that world changes.
+Lifeline is a flood-response command center where the plan is never written in advance.
+It is computed, every time, from a live Neo4j graph of roads, bridges, hazards, shelters,
+clinics, responders, vehicles, supplies and the households who need help. When a road
+floods, the graph changes, the old plan is shown to be broken, and a different plan
+appears — often with a different responder as well as a different route, because the same
+water that closed the road also cut the volunteer off from the family.
 
-`Next.js 16` · `React 19` · `TypeScript` · `neo4j-driver 6` · `Neo4j Aura` · `vitest`
+`Neo4j Aura` · `Next.js 16` · `TypeScript` · `MapLibre GL` · `Cytoscape.js` · `OpenAI-compatible LLM (optional)`
 
-> **Simulation environment.** The district, the people and the emergency are
-> synthetic. See [Safety and ethics](#safety-and-ethics).
+> **Simulation.** Every person, shelter, volunteer and place in this app is fictional, set
+> in an invented "Bagmati West" district. Nothing on screen is a live emergency feed.
+
+**Contents** — [The problem](#the-problem-is-real) · [The scenario](#the-scenario) ·
+[On screen](#what-happens-on-screen) · [Why the graph is the product](#why-the-graph-is-the-product) ·
+[Scoring](#scoring-and-the-route-that-wins-by-losing-on-speed) ·
+[How we used each technology](#how-we-used-each-technology) · [Architecture](#architecture) ·
+[Measured results](#measured-results) · [Run it](#run-it) · [API](#api) · [Tests](#tests) ·
+[Safety and limits](#safety-ethics-and-limitations) · [Roadmap](#roadmap)
 
 ---
 
-## The problem
+## The problem is real
 
-The Sharma family is in Ward 3 — Riverside Lane. Four people:
+On 26 August 2026, a mass of rock and ice broke off in Nepal's Langtang valley and fell
+roughly 1,200 metres, registering as a magnitude 5.2 event on seismometers. The resulting
+surge travelled almost 100 km down the Trishuli, at points 70 metres above normal river
+level, through Rasuwa and Nuwakot. More than 1,300 people were killed and around 5,500
+remained missing a week later; the economic cost is estimated at $4–7 billion. Villages
+and bridges were removed from the map entirely.
+([Britannica](https://www.britannica.com/event/Nepal-floods-of-2026) ·
+[The Conversation](https://theconversation.com/when-a-mountain-falls-how-ice-and-rock-triggered-nepals-catastrophic-flood-and-why-climate-change-is-raising-the-risks-290779))
 
-| | |
+Two years earlier, in the September 2024 monsoon floods, every major route out of the
+Kathmandu Valley was blocked at the same time, with 17 road sections impassable, during
+the heaviest rainfall since Nepal began modern hydrological monitoring in 1970.
+([ScienceDirect](https://www.sciencedirect.com/science/article/pii/S2666592125000435))
+
+The pattern in both: **people were not unreachable. They were unroutable.** Help existed.
+Shelter existed. What nobody could compute, fast enough and for a specific household, was
+a path that was still open.
+
+A flood response needs the truth on two sides at once:
+
+| The household that is stuck | The few people coordinating |
 |---|---|
-| **Bikash**, 41 · **Rita**, 38 | parents |
-| **Nirajan**, 9 | needs **asthma rescue medication** |
-| **Kamala**, 71 | needs **wheelchair-level mobility assistance** |
-| household | **has no vehicle** |
+| "Where do we go? Is that road still there? Will someone come for my grandmother?" | "Reports arriving faster than anyone can read. Six vans. Which plans just broke?" |
+| Needs one instruction they can act on now | Needs the whole picture, and a reason for every decision |
 
-Floodwater is rising. They do not need more information — they need one answer
-that is still true right now. And almost every obvious answer is wrong:
+In a hill district the answer to both is a **path question**, and a path is only useful if
+several unrelated facts hold simultaneously: the roads are open, a responder can reach
+you, their vehicle fits your mobility needs, the shelter has beds, and the medicine you
+depend on is somewhere you can get to. Any one of those can change in a minute, and when
+it does, every plan that depended on it is silently wrong.
 
-- The **nearest** shelter, Old Market Hall, is **60 / 60 — already full**.
-- The **fastest** way out crosses Bagmati Crossing, a 2-minute bridge — and it is
-  **closed by pier scour**, and the shelter it leads to, Thapa Ground, is the one
-  in the district **without step-free access**.
-- The **shortest** link to the hill road, Khola Footbridge, is a genuine
-  3-minute connection that **no vehicle can use** — so it silently disappears
-  for a family travelling in an accessible van.
-
-A safe plan for the Sharmas is not a shelter, or a road, or a driver. It is all
-of these being simultaneously true:
-
-> a road that is **still open**, **and** a responder who can **still reach
-> them**, **and** whose vehicle is **wheelchair accessible**, **and** a shelter
-> with **room** and **step-free** access, **and** an **inhaler within reach of
-> that shelter** — and no active hazard invalidating any link in that chain.
-
-Break one link and the whole plan is worthless. That is not a search problem.
-It is a **connectivity** problem.
+**Lifeline's thesis: you cannot write the protocol in advance, because the protocol
+depends on facts that change by the minute. So the graph is the protocol.** Every fact is
+a node or a relationship. Every event rewrites it. Every instruction is a traversal of the
+graph as it is right now.
 
 ---
 
-## The solution
+## The scenario
 
-Lifeline models the district as a live graph and answers the whole question in
-one traversal.
+The demo follows one household through one night in the fictional district.
 
-- **Every safety claim is a Cypher result.** The application never decides which
-  route is safe; it renders an ordered list of plans that Neo4j found and ranked.
-- **Disruptions are graph writes, not UI state.** "Flood Riverside Road" does
-  not set a flag the frontend reads — it `MERGE`s
-  `(:Segment)-[:BLOCKED_BY]->(:Hazard {active: true})` inside Neo4j. Every
-  subsequent traversal sees a different world because *the world changed*.
-- **Plans live in the graph too.** A recommendation is persisted as
-  `(:Plan)-[:USES]->(...)`, so "which plans did this hazard just break?" is a
-  one-hop traversal from the hazard — not a diff computed on a client.
-- **It degrades loudly.** There is no offline fallback and no cached route. If
-  Neo4j is unreachable the API returns `503 GRAPH_UNAVAILABLE`. An invented safe
-  path is worse than no answer.
+**06:42.** The Sharma family, Ward 3 Riverside Lane. Four people. Kamala, 71, cannot walk
+far. Nirajan, 9, needs asthma medication. No usable vehicle. Floodwater rising at the end
+of the lane.
 
-What the graph returns for the Sharma family at baseline — every value below is
-read back from Neo4j, not written by hand:
+Lifeline recommends **Maya Shrestha** with an accessible van, via Riverside Road to
+**Patan Community Relief Center** — 21 minutes, 50 beds free after they arrive, step-free,
+with **Patan Health Post 300 m away** holding salbutamol inhalers.
 
-| | |
-|---|---|
-| **Destination** | Patan Community Relief Center — 50 spaces free after they arrive, step-free |
-| **Responder** | Maya Shrestha, 5 min away at Ward 4 Volunteer Depot |
-| **Vehicle** | Accessible Community Van 2 — wheelchair accessible, seats 6 |
-| **Route** | Riverside Lane → Riverside Road (Chowk) → Riverside Road (River) → Pumping Station Road → Patan Gate Approach · **21 min** |
-| **Medicine** | Patan Health Post, **300 m** from the shelter, 24 salbutamol inhalers in stock |
-| **Score** | **38.7** (lower is safer — [breakdown below](#multi-dimensional-scoring)) |
+**06:52.** Riverside Road floods.
 
-Then Riverside Road floods, and **both halves of the plan change at once**:
-the destination becomes Hillcrest School Relief Point *and* the responder
-becomes Arun Thapa — because the same flood that severed the corridor also
-severed Maya's depot from the family. Nobody marked Maya unavailable. The graph
-simply stopped being able to reach her.
+The plan does not degrade gracefully. It becomes wrong. Lifeline re-traverses the network
+and returns **Arun Thapa**, via Hill Road to **Hillcrest School Relief Point**, with
+**East Ward Clinic 600 m away**.
+
+Both halves of the plan changed, and only one of those was the obvious one. Maya was
+staged at the Ward 4 depot, whose only step-free access ran along the same corridor the
+flood took. She did not become unavailable — she became **unreachable**, which is a
+property of the graph, not a flag on her record. Nothing in the code special-cases this.
+It falls out of the traversal.
+
+Two other households sit in the same district and are visible on the map: the Gurung
+family, who have their own car and need only shelter space, and the Tamang family, who
+live directly on the river bend with an infant.
 
 ---
 
-## Why a graph? Why Neo4j?
+## What happens on screen
 
-**This is the part that matters.**
+The command center has the map in the middle, the household situation on the left, the
+live Neo4j graph on the right, and the plan with its evidence along the bottom.
 
-Traditional disaster tools treat information as isolated records: a shelter
-row, a road-closure row, a hospital row, a volunteer row. Each is individually
-correct and collectively useless, because **a family's viable escape plan does
-not exist inside any of those records. It exists *between* them.**
+| Step | What you see | What Neo4j does | Code |
+|---|---|---|---|
+| **Find a safe path** | The report becomes need chips; four beats tick through: extracting needs, checking active hazards, mapping reachable resources, finding viable paths | Intake writes the household's needs onto the graph, then one query enumerates every hazard-aware walk, matches transport and medicine, and ranks what survives | `src/lib/intake/`, `src/lib/neo4j/queries/recommend.ts` |
+| **Traversal** | The graph lights node by node along the chain; the route draws itself on the map | The chain is built only from query results: family → need → responder → vehicle → segments → shelter → clinic → resource | `src/lib/service/recommendation.ts`, `src/components/graph/` |
+| **Plan card** | *Maya Shrestha → Riverside Lane → Patan Community Relief Center*, with the evidence beside it | `RECOMMEND_CYPHER` returns the path, the transport and the care site in one result | `recommend.ts` |
+| **How this was scored** | Each weighted term with its contribution, and the runner-up's score | Scores are computed inside Cypher and returned per dimension | `recommend.ts` |
+| **Why this recommendation?** | Everything dims except the chain; each relationship lights with one line of reason | `EXPLAIN_PLAN_CYPHER` re-reads the stored plan's relationships | `src/lib/neo4j/queries/plans.ts` |
+| **Flood road** | Alert slides in, the hazard footprint grows on the map, the route turns red and retracts | `ACTIVATE_HAZARD_CYPHER` MERGEs `BLOCKED_BY` edges and marks locations `AFFECTED_BY` | `src/lib/neo4j/queries/events.ts` |
+| **Current plan compromised** | A recovery ladder: plan invalidated → re-traversing → new plan | `PLANS_INVALIDATED_BY_HAZARD_CYPHER` walks Hazard → Segment → `USES` → Plan → Family | `plans.ts` |
+| **A new plan** | Different shelter *and* different responder, with the previous plan struck through | The same traversal over the changed graph | `recommend.ts` |
+| **Fill shelter / Stand down responder** | Different breakages, different answers | Capacity or availability changes; plans re-derived | `events.ts` |
+| **Field update** | Free text becomes graph changes, with a diff of what was applied and what was not matched | Parsed, validated, then applied through controlled parameterised writes | `src/lib/intake/bulletin.ts`, `apply.ts` |
+| **Graph view** | The Cypher that ran, per-query timings, row counts, and every rejected destination with its reason | Trace collected from each call; `REJECTED_CYPHER` explains the destinations *not* chosen | `src/lib/neo4j/client.ts`, `rejected.ts` |
+| **Reset** | Clean seed state | Restores statuses, capacities, availability, household needs; removes runtime hazards and alerts | `src/lib/neo4j/seed.ts` |
 
-A route is only useful if:
+---
+
+## Why the graph is the product
+
+If Neo4j is unreachable, Lifeline shows **"Lifeline cannot reason right now"** and refuses
+to answer. Nothing is precomputed, and the browser never holds a copy of the world it
+could reason over on its own. Every plan on screen came from the last query.
+
+### The model: roads are nodes, not relationships
 
 ```
-roads remain reachable
-  AND required transport exists
-    AND that transport satisfies the household's mobility needs
-      AND the destination still has capacity
-        AND the destination is step-free
-          AND the required medicine exists within reach of it
-            AND no active hazard invalidates any link in that chain
+(:Location)<-[:CONNECTS]-(:Segment:Road|:Bridge {status, travelMinutes, floodRisk, accessibility})-[:CONNECTS]->(:Location)
+(:Segment)-[:BLOCKED_BY]->(:Hazard {active})
+(:Location)-[:AFFECTED_BY]->(:Hazard)
+(:Family)-[:HAS_MEMBER]->(:Person)-[:HAS_NEED]->(:Need)
+(:Family)-[:HAS_NEED]->(:Need)
+(:Family)-[:LOCATED_AT]->(:Location)
+(:Shelter|:CareSite)-[:LOCATED_AT]->(:Location)
+(:Location)-[:NEAR {meters}]->(:Location)
+(:Shelter|:CareSite)-[:HAS_RESOURCE]->(:Resource)-[:SATISFIES]->(:Need)
+(:Volunteer)-[:AVAILABLE_AT]->(:Location)
+(:Volunteer)-[:HAS_VEHICLE]->(:Vehicle)-[:SUPPORTS_NEED]->(:Need)
+(:Volunteer)-[:CAN_ASSIST]->(:Need)
+(:Plan)-[:USES]->(:Segment|:Shelter|:Volunteer|:Vehicle|:CareSite)
+(:Plan)-[:FOR_FAMILY]->(:Family)
+(:Alert)-[:AFFECTS]->(:Segment|:Shelter)
 ```
 
-Every `AND` in that list is a **relationship**, not a column. In a relational
-model, answering it means a cascade of joins whose depth is not known in
-advance, re-run from scratch on every change, against a schema that has no
-place to attach "this road is currently impassable *for this traveller*".
+**13 node types, 15 relationship types.**
 
-In a graph, it is one traversal, and the disruption is one edge.
+The single decision everything else rests on is that a road is a **node**. The alternative
+— connectivity as a relationship, `(:Location)-[:CONNECTED_TO {roadId, status}]->(:Location)` —
+was rejected for a structural reason, not a stylistic one:
 
-**Neo4j lets Lifeline continuously traverse and recompute this connected world
-whenever any relationship changes.** A hazard activating is a `MERGE` of a
-single `BLOCKED_BY` edge; the very next traversal walks a different world, and
-the second-order consequences — a responder cut off, an alternative that is
-suddenly the best one, a care site that fell inside the footprint — fall out of
-the graph on their own. Nobody enumerated them.
+> Neo4j has no relationship-to-relationship edges. A road modelled as a relationship can
+> never be the **target** of `(:Segment)-[:BLOCKED_BY]->(:Hazard)`, the object of a
+> `(:Plan)-[:USES]->` edge, or an addressable entity the UI can pulse red. The reason a
+> road is unusable would have to live in a status string somewhere, maintained by hand.
 
-> **Neo4j is not used as generic storage.**
-> **Core safety-path discovery, dependency traversal, alternative-path discovery
-> and impact propagation are graph operations executed against Neo4j.**
+With segments as nodes, blocking a road is one `MERGE` of one edge, and *every* candidate
+path crossing that segment is invalidated inside the same traversal that finds paths.
+There is no derived copy of the network to keep in sync, so the map, the graph panel and
+the router cannot disagree about what is open.
 
-Concretely, these are Cypher, not application logic:
+The accepted cost: the physical network is **bipartite**, so every segment is two hops and
+journeys are undirected variable-length walks, `[:CONNECTS*2..24]` — at most twelve
+segments. That bound is also a product rule. A twelve-segment route is not one you hand to
+a family in a flood.
 
-| Graph operation | Where it lives | What it decides |
+### One definition of "passable", written once
+
+Everything hinges on a single predicate, interpolated into every traversal so the route
+query, the pickup query and the rejection analysis can never disagree:
+
+```cypher
+NOT n:Segment OR (
+  n.status <> 'blocked'
+  AND NOT exists((n)-[:BLOCKED_BY]->(:Hazard {active: true}))
+  AND (requireTransport = false OR n.accessibility <> 'foot_only')
+  AND (requireStepFree  = false OR n.accessibility = 'full')
+)
+```
+
+This is the mechanism, and it is worth being precise about why it matters. A segment is
+not rejected because something copied a flag onto it. It is rejected **because an edge
+exists**, evaluated as the path is being built. Activating a hazard writes one
+relationship; the next traversal sees a different world.
+
+It also encodes the two accessibility traps in the district. `seg_khola_footbridge` is a
+genuine three-minute link to Hill Road that **no vehicle can use**, so it silently
+disappears for a household travelling by accessible van. `seg_bagmati_crossing` is the
+deceptive shortcut: nine minutes end to end, less than half of any viable option, but the
+bridge is scoured *and* it leads to the one shelter without step-free access.
+
+### The questions Lifeline asks
+
+Sixteen named Cypher statements across six files, one file per concern.
+
+| File | Statements | What it answers |
 |---|---|---|
-| **Safety-path discovery** | `queries/recommend.ts` | Which walks from the family to a shelter survive the live hazard state |
-| **Dependency traversal** | `queries/recommend.ts` | `Family → Person → Need`, `Shelter → NEAR → CareSite → HAS_RESOURCE → Resource → SATISFIES → Need` |
-| **Alternative-path discovery** | `queries/recommend.ts` | Every surviving destination, ranked — the alternatives are found, not stored |
-| **Impact propagation** | `queries/plans.ts`, `queries/events.ts` | Which persisted plans a new hazard just invalidated, and what else it ripples into |
-| **Rejection reasoning** | `queries/rejected.ts` | Why every *other* destination was ruled out, counted in candidate walks |
-| **Missing-link diagnosis** | `queries/missingLink.ts` | Which single relaxed constraint would bring a plan back |
+| `recommend.ts` | `RECOMMEND_CYPHER` | The whole question in one query: needs, transport, every viable walk, resource match, ranking |
+| `rejected.ts` | `REJECTED_CYPHER` | For every destination *not* chosen, why: capacity, accessibility, or hazard-blocked connectivity |
+| `missingLink.ts` | `RELAXED_FEASIBILITY_CYPHER`, `NEAREST_ACCESSIBLE_RESPONDER_CYPHER`, `NEAREST_SAFE_WAIT_POINT_CYPHER` | When nothing works, which single constraint would unlock a route |
+| `plans.ts` | `PERSIST_PLAN_CYPHER`, `PLANS_INVALIDATED_BY_HAZARD_CYPHER`, `PLANS_COMPROMISED_CYPHER`, `EXPLAIN_PLAN_CYPHER` | Store a plan in the graph, ask which plans an event just broke, explain one |
+| `events.ts` | `ACTIVATE_HAZARD_CYPHER`, `DEACTIVATE_HAZARD_CYPHER`, `BLOCK_SEGMENT_CYPHER`, `SET_SHELTER_FULL_CYPHER`, `SET_VOLUNTEER_STATUS_CYPHER`, `HAZARD_RIPPLE_CYPHER` | Disruptions as graph writes |
+| `graphSnapshot.ts` | `GRAPH_SNAPSHOT_CYPHER`, `GRAPH_EDGES_CYPHER`, `SCENARIO_STATE_CYPHER` | One projection the map and the graph panel both render |
 
-**If Neo4j disappeared, Lifeline would stop being Lifeline.** It would not
-degrade into a slower version of itself — there would be nothing left. The
-routing, the ranking, the rejections, the explanation and the impact analysis
-are all the same traversal engine wearing different questions.
+Three of these do work a relational lookup structurally cannot:
+
+**The recommendation** enumerates walks with `[:CONNECTS*2..24]`, filters them mid-traversal
+with a pattern predicate inside `all()`, folds each surviving path into travel time, summed
+flood exposure, worst segment and hazard-zone count with `reduce()`, then matches medicine
+through `Shelter -> NEAR -> CareSite -> HAS_RESOURCE -> Resource -> SATISFIES -> Need` — all
+in one statement, ordered by a score computed in the same query.
+
+**Plan invalidation** is a one-hop traversal from the event, not a diff computed on the
+client:
+
+```cypher
+MATCH (h:Hazard {id: $hazardId})<-[:BLOCKED_BY]-(seg:Segment)<-[:USES]-(plan:Plan)-[:FOR_FAMILY]->(fam:Family)
+WHERE plan.status = 'active' AND h.active = true
+SET plan.status = 'compromised'
+RETURN plan.id, fam.name, collect(DISTINCT seg {.id, .name}) AS brokenSegments
+```
+
+Because plans are stored as `(:Plan)-[:USES]->`, asking "what did this flood just break?"
+is a question you ask the graph, not a comparison you compute.
+
+**The missing link** answers the case everyone else renders as an empty state. When no plan
+exists, Lifeline relaxes one constraint at a time and asks the graph which relaxation
+brings plans back, then names the nearest thing that would satisfy it:
+
+> **No complete safe path currently exists.**
+> Missing link: **wheelchair-accessible transport.**
+> Sunita Lama has an accessible vehicle but is 3.2 km outside the response zone at Valley
+> General Hospital.
+
+---
+
+## Scoring, and the route that wins by losing on speed
+
+Ranking happens inside Cypher, and each weighted term is returned separately so the UI can
+show *which* term decided the outcome. Lower is safer.
+
+| Term | Weight | Computed from |
+|---|---|---|
+| Travel time | `1.0` / min | Sum of `travelMinutes` over the path |
+| Route flood exposure | `12.0` × Σ risk | Summed per-segment `floodRisk` |
+| Worst single segment | `10.0` × max | The highest-risk segment on the route |
+| **Active hazard zones crossed** | **`30.0` each** | Path nodes with an `AFFECTED_BY` edge to an active hazard |
+| Destination capacity | `−0.25` / bed (cap 60) | Beds free after the household arrives |
+| Distance to medicine | `1.2` / 100 m | `NEAR` distance to a care site stocking the needed resource |
+| No reachable clinic | `60.0` | Applied when a medical need has no reachable site |
+| Responder pickup | `0.6` / min | Minutes for the matched responder to reach the family |
+
+The weights encode a policy: **safety outranks accessibility and resource fit, which
+outrank reachability, which outranks speed.** The hazard-zone term is deliberately the
+largest single penalty, because crossing an active flood footprint is categorically
+different from taking a slower road.
+
+This produces a result that is worth pausing on. **After the flood, Hillcrest (25 min)
+beats Patan (23 min) — the slower route wins.**
+
+```
+BASELINE          Patan Community Relief Center   38.7   21 min   0 hazard nodes
+                  Hillcrest School Relief Point   45.4   25 min   0 hazard nodes
+
+AFTER FLOOD       Hillcrest School Relief Point   46.6   25 min   0 hazard nodes   ← now best
+                  Patan Community Relief Center   73.1   23 min   1 hazard node
+```
+
+Patan is still physically reachable after the flood, by an inland detour that is actually
+*two minutes shorter* than the hill route. It loses because that detour must pass through
+Patan Gate, which sits inside the active flood footprint — one `AFFECTED_BY` edge, +30.
+The system is not choosing the shortest road. It is choosing the one that does not walk a
+family with a 71-year-old and a 9-year-old through moving water to save two minutes.
+
+The demo's four states all fall out of the same scoring. None are special-cased:
+
+| State | Destination | Responder | Score |
+|---|---|---|---|
+| Baseline | Patan Community Relief Center | Maya Shrestha | 38.7 |
+| Riverside Road flooded | Hillcrest School Relief Point | **Arun Thapa** | 46.6 |
+| Patan at capacity | Hillcrest School Relief Point | Maya Shrestha | 45.4 |
+| Maya unavailable | Patan Community Relief Center | Arun Thapa | 39.9 |
+| No accessible responder | *no route* — missing link named | — | — |
+
+`npm run truth` asserts all nine of these expectations against the live graph.
+
+---
+
+## How we used each technology
+
+### Neo4j Aura
+
+**The instance.** A single Aura Free instance over encrypted Bolt (`neo4j+s://`) with the
+official `neo4j-driver` v6, from Next.js route handlers only — the browser never talks to
+Neo4j. One quirk worth documenting: this instance type authenticates with the **instance
+id as both the username and the database name**, not the conventional `neo4j`/`neo4j`. A
+wrong guess fails as a bare "unauthorized" with no hint which field is wrong.
+
+**Schema.** `npm run neo4j:init` issues idempotent DDL: **14 uniqueness constraints and 7
+indexes**. The constraints are not only correctness — the seed `MERGE`s on `id` throughout,
+and without the backing index every `MERGE` degrades to a label scan. The seven indexes are
+exactly the properties the traversals filter on (`Segment.status`, `Hazard.active`,
+`Volunteer.status`, `Shelter.status`, `Need.kind`, `Resource.type`, `Plan.familyId`),
+chosen by reading the query set rather than guessed.
+
+**Seed.** `npm run seed` writes the district in batched `UNWIND` statements and reports
+every label and relationship count: **107 nodes and 156 relationships** at seed state — 20
+locations, 26 segments (3 of them bridges), 4 shelters, 4 care sites, 7 volunteers, 7
+vehicles, 13 resources, 3 families, 12 people, 7 needs, 4 hazards.
+
+**Failing loudly.** Every call goes through one `execute()` wrapper that turns any failure —
+auth rejection, timeout, network drop — into a single `GraphUnavailableError`, which is the
+only thing route handlers map to `503 GRAPH_UNAVAILABLE`. The alternative, quietly returning
+an empty array, would be indistinguishable from *"no safe route exists"* — which is a real
+and important answer this system also has to give. Conflating the two would make the product
+lie at exactly the moment it matters most.
+
+**The query trace.** Each recommendation returns not just an answer but which Cypher ran,
+how long each statement took, and how many rows it returned, rendered verbatim in the
+judge-facing Graph view. At baseline: **51 candidate walks enumerated, 22 surviving the
+predicates**, across 2 named queries.
+
+**Deterministic reset.** `resetToBaseline()` is a state *revert*, not a wipe-and-reseed —
+a teardown risks leaving the graph empty if it fails halfway, which is not a state to
+discover thirty seconds before presenting. It restores every seeded status, capacity,
+occupancy and availability, removes runtime hazards and alerts, and undoes household-level
+intake writes. The rule that keeps it honest: **any new graph-write feature needs a
+matching undo here**, or the reset guarantee silently weakens.
+
+### Language models
+
+The model turns unstructured text into validated data. **It never decides anything.**
+
+| Step | Who does it | Guard |
+|---|---|---|
+| Report text → household needs | Text model via any OpenAI-compatible endpoint | zod schema, 8s timeout, and a deterministic rule-based extractor that always runs |
+| Field bulletin → graph updates | Same | Parsed to enum actions, matched to entities that already exist, applied via parameterised Cypher |
+| Routes, shelters, responders, ranking, explanations | **Neo4j only** | No model output is ever executed as Cypher |
+
+The extractor and the model are **unioned, not swapped**. During development the model
+classified "my grandmother cannot walk far" as a free-text constraint rather than emitting
+`mobility_assistance` — a silent omission of a safety-relevant need. The union makes that
+class of miss impossible: the rules always run, and the model can only add. The UI labels
+which path produced each result, and **the entire demo runs with no model key configured.**
+
+### MapLibre GL
+
+The district is fictional, so there is no basemap. A real one would show real streets that
+contradict our road graph, and would make the demo depend on a tile server. Instead the map
+renders a **fully synthetic vector world** built in code from the same `world.ts` the seed
+uses: district boundary, river, elevation relief, every road and bridge, and hazard
+footprints — with no `glyphs` URL, which means no `symbol` layers, which means every label
+and icon is a DOM marker.
+
+One trap worth recording, because it costs hours and produces no error. **MapLibre 6
+resolves its web worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`, which
+bundlers do not rewrite.** Inside a Next.js bundle that URL 404s, and MapLibre does not
+throw: GeoJSON sources simply never finish parsing, so the map paints nothing, fires no
+`load` event and reports no error. The fix is `scripts/copy-maplibre-worker.mjs`, wired to
+`predev`/`prebuild`, which stages the worker under `public/` for `setWorkerUrl()`.
+
+### Cytoscape.js
+
+A **deterministic preset layout**, never a force layout. A force-directed graph settles
+differently on every run, which means the traversal animation lands somewhere new each time
+you present. Positions are computed by type into bands, with the road network projected
+from real latitude and longitude so the graph panel is a second view of the same world as
+the map. A damped relaxation pass de-overlaps the lattice: measured **zero collisions, with a
+20.1 px minimum separation** between any two placed nodes.
+
+### Next.js, React, Tailwind, Motion
+
+One scene machine (`useLifeline.ts`) drives the map, the graph and the cards from the same
+transition, so the three views move together. Design tokens carry three signal colours with
+fixed meanings — accent for a path that exists, amber for a condition to watch, red for
+something that no longer holds. Status is never conveyed by colour alone.
+
+### How it was built
+
+Built with parallel AI agents under a single integrating lead, with **disjoint file
+ownership** so concurrent agents could not collide: one on the graph service and Cypher,
+one on the map, one on the graph visualisation, one on natural-language intake, one on
+tests and documentation, and a later design pass split across the design system, the
+command center and the hero.
+
+The sequencing mattered more than the parallelism. The shared world module and the API
+contracts were frozen **first**, before any agent started, because parallel agents without
+a frozen contract invent conflicting ids and the integration phase is spent reconciling
+them. The core traversal was then validated against a truth table of the four demo states
+before a single line of UI existed — if the scripted outcomes had not fallen out of the
+graph's own scoring, no amount of UI polish would have saved the demo.
+
+Agents found real bugs in each other's work, which is the point: a plan-persistence query
+whose non-optional `MATCH` silently skipped every `USES` edge, resources declaring needs
+that had no `Need` node so the `SATISFIES` edge was never created, a pickup traversal
+searching half its documented depth, and a graph layout that focused the wrong household
+because its fallback sorted family ids alphabetically.
 
 ---
 
 ## Architecture
 
-```
- ┌──────────────────────────────────────────────────────────────────────────┐
- │  Natural language  ·  Field updates                                      │
- │  "Water is rising. My grandmother can't walk. We have no car."           │
- │  "Riverside Road is under water."                                        │
- └───────────────────────────────┬──────────────────────────────────────────┘
-                                 │
-                                 ▼
- ┌──────────────────────────────────────────────────────────────────────────┐
- │  STRUCTURED EXTRACTION                       src/lib/intake/             │
- │  Deterministic rules (primary, offline)  →  needs, constraints, hazards  │
- │  Conservative phrase → entity matching   →  real graph ids, or "unknown" │
- │  Optional LLM supplement may only ADD; it never chooses a route.         │
- └───────────────────────────────┬──────────────────────────────────────────┘
-                                 │  writes / reads
-                                 ▼
- ┌══════════════════════════════════════════════════════════════════════════┐
- ║  NEO4J AURA                                  src/lib/neo4j/              ║
- ║  Location · Segment(Road|Bridge) · Shelter · CareSite(Clinic|Hospital)   ║
- ║  Resource · Vehicle · Volunteer · Need · Person · Family · Hazard        ║
- ║  Alert · Plan                                                            ║
- ╚═══════════════════════════════┬══════════════════════════════════════════╝
-                                 │
-                                 ▼
- ┌──────────────────────────────────────────────────────────────────────────┐
- │  GRAPH TRAVERSAL ENGINE                      src/lib/neo4j/queries/      │
- │  hazard-aware variable-length walk  ·  transport feasibility subquery    │
- │  resource matching  ·  multi-dimensional scoring  ·  ORDER BY in Cypher  │
- └───────────────────────────────┬──────────────────────────────────────────┘
-                                 │
-                                 ▼
- ┌──────────────────────────────────────────────────────────────────────────┐
- │  SAFE PATH  +  ALTERNATIVES  +  REJECTIONS  +  MISSING LINKS             │
- │  best plan · ranked alternatives · why each destination was ruled out    │
- └───────────────────────────────┬──────────────────────────────────────────┘
-                                 │
-                                 ▼
- ┌──────────────────────────────────────────────────────────────────────────┐
- │  EXPLANATION LAYER                  queries/plans.ts · service/          │
- │  the ordered chain of relationships that has to hold, as sentences       │
- └───────────────────────────────┬──────────────────────────────────────────┘
-                                 │  one payload, two renderers
-                 ┌───────────────┴───────────────┐
-                 ▼                               ▼
- ┌───────────────────────────┐   ┌──────────────────────────────────────────┐
- │  MAP VIEW                 │   │  GRAPH VIEW                              │
- │  MapLibre · district,     │   │  Cytoscape · the same nodes and edges,   │
- │  hazard footprints, route │   │  lit in traversal order                  │
- └───────────────────────────┘   └──────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  subgraph Browser
+    CC["Command center<br/>map · live graph · plan"]
+  end
+  subgraph API["Next.js route handlers (zod · no Cypher · 503 on graph loss)"]
+    REC["/api/route/recommend"]
+    EVT["/api/events/*"]
+    IN["/api/intake"]
+    BUL["/api/bulletin"]
+    TOP["/api/graph"]
+    EXP["/api/explanation/:planId"]
+    RST["/api/scenario/reset"]
+  end
+  Q["src/lib/neo4j/queries<br/>one concern per file"]
+  M["Text model<br/>extraction only"]
+  N[("Neo4j Aura")]
+  CC --> REC & EVT & IN & BUL & TOP & EXP & RST
+  IN --> M
+  BUL --> M
+  REC & EVT & TOP & EXP & RST --> Q --> N
 ```
 
-The map and the graph render **the same payload**. There is deliberately no
-second copy of the world on the client, so the two views cannot disagree about
-which roads are open.
+The disruption path, end to end:
+
+```mermaid
+sequenceDiagram
+  participant U as Coordinator
+  participant API as /api/events/hazard
+  participant G as Neo4j
+  participant C as Command center
+  U->>API: flood Riverside Road
+  API->>G: MERGE (:Segment)-[:BLOCKED_BY]->(:Hazard {active:true})
+  API->>G: MERGE (:Location)-[:AFFECTED_BY]->(:Hazard)
+  API->>G: which active plans USE a blocked segment?
+  G-->>API: Sharma Family, 2 segments broken
+  C->>G: recommend again over the changed graph
+  G-->>C: Arun -> Hillcrest, 46.6 (Patan demoted to 73.1)
+  C-->>U: new plan, new responder, with reasons
+```
 
 ---
 
-## The graph model
+## Measured results
 
-Seeded from `src/lib/world/world.ts` — the single source of truth for both the
-Neo4j seed and the map geometry, so the graph and the map can never drift apart.
+Against live Aura, 12 September 2026:
 
-### Node labels
-
-| Label | Count | Key properties |
-|---|---:|---|
-| `Location` | 20 | `id, name, lat, lng, safetyScore, elevation, zone, status` |
-| `Segment` + `Road` \| `Bridge` | 26 (23 + 3) | `id, name, kind, travelMinutes, floodRisk, accessibility, status, baseStatus, fromId, toId` |
-| `Shelter` | 4 | `id, name, capacity, occupancy, baseOccupancy, wheelchairAccessible, status` |
-| `CareSite` + `Clinic` \| `Hospital` | 4 (3 + 1) | `id, name, kind, status` |
-| `Resource` | 13 | `id, name, type, quantity, baseQuantity, status` |
-| `Vehicle` | 7 | `id, name, type, capacity, wheelchairAccessible, status, baseStatus` |
-| `Volunteer` | 7 | `id, name, status, baseStatus, skills, distanceOutsideZoneKm` |
-| `Need` | 5 | `id, kind, label, critical` |
-| `Person` | 12 | `id, name, role, age` |
-| `Family` | 3 | `id, name, size, hasVehicle, note` |
-| `Hazard` | 4 | `id, name, hazardType, severity, active, baseActive, description, footprint` |
-| `Alert` | runtime | `id, title, body, severity, issuedAt, hazardType` |
-| `Plan` | runtime | `id, familyId, status, score, destinationId, summary, createdAt` |
-
-### Relationship types
-
-| Relationship | Direction | Meaning |
-|---|---|---|
-| `CONNECTS` | `(Segment)→(Location)` ×2 | the two ends of a road or bridge |
-| `LOCATED_AT` | `(Shelter\|CareSite\|Family)→(Location)` | where a thing physically is |
-| `AVAILABLE_AT` | `(Volunteer)→(Location)` | where a responder is staged |
-| `BLOCKED_BY` | `(Segment)→(Hazard)` | **the edge that closes a road** |
-| `AFFECTED_BY` | `(Location)→(Hazard)` | inside an active hazard footprint |
-| `HAS_MEMBER` | `(Family)→(Person)` | household composition |
-| `HAS_NEED` | `(Family\|Person)→(Need)` | what must be satisfied |
-| `HAS_VEHICLE` | `(Volunteer)→(Vehicle)` | who drives what |
-| `SUPPORTS_NEED` / `CAN_ASSIST` | `(Vehicle\|Volunteer)→(Need)` | capability |
-| `HAS_RESOURCE` | `(Shelter\|CareSite)→(Resource)` | stock on hand |
-| `SATISFIES` | `(Resource)→(Need)` | what that stock is *for* |
-| `NEAR` | `(Location)→(Location)`, both ways, `meters` | "there's a clinic 300 m away" |
-| `USES` | `(Plan)→(Segment\|Shelter\|Volunteer\|Vehicle\|CareSite)` | what a plan depends on |
-| `FOR_FAMILY` | `(Plan)→(Family)` | whose plan it is |
-| `AFFECTS` | `(Alert)→(Segment\|Shelter)` | what an alert is about |
-
-### The key modelling decision: roads are NODES, not relationships
-
-The obvious model is `(:Location)-[:ROAD {minutes, risk}]->(:Location)`. Lifeline
-deliberately does not do that.
-
-```
-(:Location)<-[:CONNECTS]-(:Segment:Road)-[:CONNECTS]->(:Location)
-```
-
-**Why.** A hazard has to be able to point *at* a road:
-`(:Segment)-[:BLOCKED_BY]->(:Hazard)`. **Neo4j has no relationship-to-node
-edges** — you cannot attach a relationship to another relationship. A road
-modelled as a relationship could therefore never be the target of a hazard, an
-alert, or a plan's `USES` edge. You would be forced into a shadow table of
-"currently closed road ids" that the router consults separately — a derived
-copy of the network, and a new way for the map, the graph view and the router
-to disagree about which roads are open.
-
-Segment-as-node keeps **one** representation of the world:
-
-- blocking a road is a single `MERGE` of a `BLOCKED_BY` edge;
-- the traversal predicate reads that edge **during** path expansion, so a
-  blocked road is rejected mid-walk rather than filtered out afterwards;
-- `(:Plan)-[:USES]->(:Segment)` makes "which plans did this hazard break?" a
-  two-hop traversal from the hazard;
-- there is nothing to keep in sync, because there is no second copy.
-
-**The consequence: traversal is an undirected, variable-length walk over a
-bipartite `Location`/`Segment` graph.** Because both `CONNECTS` edges point
-*out* of the segment, a journey alternates Location → Segment → Location →
-Segment → … and must be matched **undirected** (no arrow in the pattern):
-
-```cypher
-MATCH routePath = (origin:Location)-[:CONNECTS*2..24]-(destLoc:Location)
-```
-
-Two consequences worth knowing: hop counts are **doubled** (a 5-road route is
-10 `CONNECTS` hops — `WEIGHTS.maxHops = 12` segments becomes `*2..24`), and
-because an undirected variable-length walk can revisit a place, the query drops
-any path that does:
-
-```cypher
-WITH routePath, [x IN nodes(routePath) WHERE x:Location] AS locs
-WHERE size(locs) = size(apoc.coll.toSet(locs))   // no doubling back
-```
-
-A deeper reference — every property, every traversal pattern, and the core
-reasoning queries mapped to their files — is in
-**[docs/GRAPH_MODEL.md](docs/GRAPH_MODEL.md)**.
+| Measure | Result |
+|---|---|
+| Baseline plan | Maya Shrestha (Accessible Community Van 2) → Patan Community Relief Center · 21 min · 5 min pickup · 50 beds free · Patan Health Post 300 m |
+| After flooding Riverside Road | Arun Thapa (Accessible Relief Van 5) → Hillcrest School Relief Point · 25 min · 7 min pickup · East Ward Clinic 600 m |
+| Patan after the flood | Still reachable, demoted 38.7 → 73.1 (crosses one active hazard zone) |
+| Recommendation latency | ~831 ms cold, **~150–166 ms warm** |
+| Candidate walks | 51 enumerated, 22 surviving the predicates |
+| Seed state | 107 nodes · 156 relationships · 14 constraints · 7 indexes |
+| Reset | Deterministic; truth table passes identically after repeated disruptions |
+| Graph layout | 0 collisions; 20.1 px minimum separation between any two nodes |
+| Tests | **94 passing** against live Aura |
+| Demo truth table | **9/9 expectations met** |
 
 ---
 
-## Setup
+## Run it
 
-**Prerequisites:** Node.js (verified on v26) and a Neo4j instance with **APOC** available.
-A free [Neo4j Aura](https://console.neo4j.io) instance is ideal — APOC core is
-included, and Lifeline uses `apoc.create.addLabels` in the seed and
-`apoc.coll.toSet` / `apoc.coll.flatten` in the traversal queries.
+**Prerequisites:** Node.js 20+, a free [Neo4j Aura](https://console.neo4j.io) instance. A
+model key is optional — without one, intake uses the deterministic extractor.
 
 ```bash
-npm install                       # 1. dependencies
-cp .env.example .env.local        # 2. paste your Aura credentials into .env.local
-npm run neo4j:init                # 3. constraints + indexes
-npm run seed                      # 4. wipe and seed the synthetic district
-npm run dev                       # 5. http://localhost:3000
+npm install
+cp .env.example .env.local     # Aura credentials; model keys optional
+npm run neo4j:init             # constraints + indexes (idempotent)
+npm run seed                   # seed the district, verify counts
+npm run dev                    # http://localhost:3000
 ```
-
-Steps 1, 3 and 4 are bundled as **`npm run setup`**.
 
 | Script | What it does |
 |---|---|
-| `npm run setup` | `npm install` → `neo4j:init` → `seed` |
-| `npm run neo4j:init` | Applies the uniqueness constraints and indexes in `schema.ts` |
-| `npm run seed` | Wipes the database and re-seeds the district deterministically |
-| `npm run reset` | Returns a mid-demo graph to the seeded baseline (no re-seed) |
-| `npm run truth` | Prints five scenario states and checks 9 expectations against the live graph |
-| `npm run test` | `vitest run` — unit + live-graph integration tests |
-| `npm run dev` | Next.js dev server |
+| `npm run setup` | install, then `neo4j:init`, then `seed` |
+| `npm run seed` | Wipe and reseed the district, printing every label and relationship count |
+| `npm run reset` | Restore the demo graph to seed state |
+| `npm run truth` | Run all four demo states against the live graph and assert the nine expectations |
+| `npm test` | 94 tests, integration tests run against live Aura |
 
-Verify the connection at any time: `GET /api/health` returns the Neo4j version,
-or `503` with a machine-readable `GRAPH_UNAVAILABLE` code.
+**Troubleshooting**
 
-### Environment variables
-
-| Variable | Required | Default | Purpose |
-|---|:--:|---|---|
-| `NEO4J_URI` | **yes** | — | e.g. `neo4j+s://xxxxxxxx.databases.neo4j.io` |
-| `NEO4J_USERNAME` | **yes** | — | Aura uses the instance id as the username |
-| `NEO4J_PASSWORD` | **yes** | — | from the Aura credentials file |
-| `NEO4J_DATABASE` | no | `neo4j` | Aura uses the instance id as the database name |
-| `OPENAI_BASE_URL` | no | — | any OpenAI-protocol endpoint (OpenAI, Nebius, OpenRouter, vLLM, Ollama) |
-| `OPENAI_API_KEY` | no | — | unset ⇒ the deterministic rule extractor runs alone; the demo is unaffected |
-| `OPENAI_MODEL` | no | — | model id for intake parsing only — **never** for routing |
-| `MAPBOX_TOKEN` | no | — | optional basemap underlay; the district renders as vectors without it |
-
-There is **no** environment variable that makes Lifeline work without Neo4j.
-That is intentional.
+- *"Lifeline cannot reason right now"* — check `.env.local`. Note that Aura Free often uses
+  the **instance id** as both username and database, not `neo4j`.
+- *Connected but empty* — run `npm run seed`.
+- *No viable path on first load* — a previous run left roads flooded. Press **Reset**.
+- *The map is blank* — the browser window must be **foregrounded**. Hidden tabs pause
+  `requestAnimationFrame`, so WebGL never paints. This is a browser behaviour, not a bug.
 
 ---
 
-## Demo workflow
+## API
 
-Seven beats. Nothing is scripted playback — each step issues the same API call
-the buttons issue, and if the graph disagrees, the demo visibly changes with it.
-The in-app **Story Mode** drives five of these automatically.
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/health` | — | Neo4j connectivity and version |
+| GET | `/api/graph` | — | `{nodes, edges}` shared by map and graph panel |
+| GET | `/api/scenario` | — | Live counters, active hazards, blocked segments, district geometry |
+| POST | `/api/route/recommend` | `{familyId, persist?}` | Ranked plans, transport, chain, rejections, missing links, query trace |
+| GET | `/api/recommendation/[familyId]` | — | Same, without persisting a `(:Plan)` |
+| GET | `/api/explanation/[planId]` | — | The ordered relationships behind a stored plan |
+| POST | `/api/events/hazard` | `{hazardId, active?}` | Impacted ids, invalidated plans, alert |
+| POST | `/api/events/road-block` | `{segmentId}` | Same shape |
+| POST | `/api/events/shelter-full` | `{shelterId}` | Same shape |
+| POST | `/api/events/volunteer` | `{volunteerId, status?}` | Same shape |
+| POST | `/api/intake` | `{familyId, text?, structured?}` | Extracted situation and what was written to the graph |
+| POST | `/api/bulletin` | `{text}` | Structured diff of applied changes and unmatched phrases |
+| POST | `/api/scenario/reset` | — | Restores baseline |
 
-| # | Scene | Action | What the graph does |
-|:-:|---|---|---|
-| **1** | **A family asks for help** | Select the Sharma family · *Ask Lifeline* | `Family → Person → Need` is read from the graph: mobility assistance, asthma medication, transport, shelter |
-| **2** | **A path that still exists** | — | Every hazard-aware walk to every qualifying shelter is enumerated and ranked. Winner: **Patan Community Relief Center**, driver **Maya Shrestha**, **21 min**, inhalers **300 m** away, score **38.7** |
-| **3** | **Show why** | *Show why* | The plan is replayed as an ordered chain of relationships — each one a sentence, each one a link that must hold |
-| **4** | **The world changes** | *Flood Riverside Road* | `MERGE (:Segment)-[:BLOCKED_BY]->(:Hazard {active:true})` × 3 segments, `AFFECTED_BY` × 4 locations. The graph is then asked which persisted plans that just broke |
-| **5** | **A different path lights up** | — | Re-traversal returns **Hillcrest School Relief Point** *and* **Arun Thapa**. Both halves changed: the flood also severed Maya's depot access road. Score **46.6** |
-| **6** | **Pressure, then the missing link** | *Fill the shelter* · *Stand down responders* | Shelters fill and responders drop out until nothing survives. Lifeline stops guessing and names the one missing relationship: **Sunita Lama** has an accessible van but is **3.2 km outside the response zone** |
-| **7** | **Reset** | *Reset scenario* | A graph write returns every status to its seeded value and deletes every hazard edge added mid-demo. The recommendation returns **identical** — same destination, same responder, same score |
-
-Every scene above is asserted by [`tests/graph.test.ts`](tests/graph.test.ts);
-scenes 2, 5 and 7 are also printed by `npm run truth`.
-
----
-
-## Example Cypher
-
-Three real excerpts from the codebase.
-
-### 1. The traversal predicate — a road is rejected *while the path is being built*
-
-From `SEGMENT_PREDICATE` in
-[`src/lib/neo4j/queries/recommend.ts`](src/lib/neo4j/queries/recommend.ts). One
-predicate, reused for both the family's route and the responder's pickup leg:
-
-```cypher
-MATCH routePath = (origin)-[:CONNECTS*2..24]-(destLoc)
-WHERE all(n IN nodes(routePath) WHERE
-        NOT n:Segment OR (
-          n.status <> 'blocked'
-          AND NOT exists((n)-[:BLOCKED_BY]->(:Hazard {active: true}))
-          AND (requireTransport = false OR n.accessibility <> 'foot_only')
-          AND (requireStepFree  = false OR n.accessibility = 'full')))
-```
-
-A segment is dropped because a `BLOCKED_BY` edge to an **active** hazard exists
-— not because a flag was copied somewhere. The same predicate is what makes the
-Khola Footbridge disappear for a family travelling by van, and what makes
-Maya's depot unreachable after the flood without anyone editing Maya.
-
-### 2. Path metrics — `reduce()` over the traversed segments, inside Neo4j
-
-```cypher
-WITH ..., routePath,
-     [x IN nodes(routePath) WHERE x:Segment]  AS segs,
-     [x IN nodes(routePath) WHERE x:Location] AS locs
-WITH ...,
-     reduce(t = 0.0, s IN segs | t + s.travelMinutes) AS travelMinutes,
-     reduce(t = 0.0, s IN segs | t + s.floodRisk)     AS riskSum,
-     reduce(m = 0.0, s IN segs |
-            CASE WHEN s.floodRisk > m THEN s.floodRisk ELSE m END) AS maxRisk,
-     size([l IN locs WHERE l <> origin
-           AND exists((l)-[:AFFECTED_BY]->(:Hazard {active: true}))]) AS hazardNodes
-WITH ...,
-     (travelMinutes * $wTime)
-       + (riskSum     * $wRiskSum)
-       + (maxRisk     * $wMaxRisk)
-       + (hazardNodes * $wHazardNode) AS pathCost
-ORDER BY pathCost ASC
-```
-
-The ranking is done by `ORDER BY` in Cypher. The application receives plans
-already sorted safest-first and renders them.
-
-### 3. Impact propagation — which plans did this hazard just break?
-
-From [`src/lib/neo4j/queries/plans.ts`](src/lib/neo4j/queries/plans.ts):
-
-```cypher
-MATCH (h:Hazard {id: $hazardId})<-[:BLOCKED_BY]-(seg:Segment)<-[:USES]-(plan:Plan)-[:FOR_FAMILY]->(fam:Family)
-WHERE plan.status = 'active' AND h.active = true
-WITH plan, fam, collect(DISTINCT seg {.id, .name}) AS brokenSegments
-SET plan.status = 'compromised'
-RETURN plan.id AS planId, fam.id AS familyId, fam.name AS familyName,
-       plan.summary AS summary, brokenSegments
-```
-
-Because plans are nodes with `USES` edges, invalidation is a **two-hop walk
-from the hazard**, and it returns the exact segments that broke — not a boolean.
+Errors use `{error, code}` with `BAD_REQUEST` (400), `NOT_FOUND` (404),
+`GRAPH_UNAVAILABLE` (503) or `INTERNAL` (500). Every handler validates input with zod and
+contains no Cypher.
 
 ---
 
-## Multi-dimensional scoring
+## Tests
 
-Lower is safer. Every weight is in `WEIGHTS` in
-[`src/lib/neo4j/queries/recommend.ts`](src/lib/neo4j/queries/recommend.ts), passed
-into Cypher as parameters, and pinned by
-[`tests/scoring.test.ts`](tests/scoring.test.ts) so this table cannot drift from
-the code.
+`npm test` runs **94 tests**. The integration tests run against the live Aura instance
+rather than mocks, because the things that actually break are the Cypher and the graph
+shape, and a mock hides exactly those. Every test resets to baseline first.
 
-| Weight | Value | Applied to |
-|---|---:|---|
-| `wTime` | **1.0** | per minute the family itself is travelling |
-| `wPickup` | **0.6** | per minute a responder needs to reach the family |
-| `wRiskSum` | **12.0** | per unit of summed per-segment forecast flood exposure |
-| `wMaxRisk` | **10.0** | per unit of the single worst segment on the route |
-| `wHazardNode` | **30.0** | **per route node inside an ACTIVE hazard footprint** |
-| `wHeadroom` | **−0.25** | credit per free bed at the destination (capped at `headroomCap`) |
-| `headroomCap` | **60** | maximum beds that can earn credit |
-| `wClinicPer100m` | **1.2** | per 100 m from the shelter to a care site holding the needed medicine |
-| `wNoClinic` | **60.0** | flat penalty when a required medical resource has no reachable care site |
-| `maxHops` | **12** | maximum segments in a route (⇒ `CONNECTS*2..24`) |
+- **`tests/graph.test.ts`** — a blocked road never appears in a returned route; an
+  inaccessible shelter is rejected for a mobility-constrained household; a shelter at
+  capacity is rejected; removing the recommended road yields a different viable route; an
+  unavailable responder is never used; the required medication is satisfied at the chosen
+  destination; the no-route case names the missing link; reset is deterministic. Plus the
+  second-order test: after the flood, **both** destination and responder change.
+- **`tests/scoring.test.ts`** — topology invariants with no database: every segment,
+  shelter, care site, volunteer and resource references a real id; the network is
+  connected; the accessibility traps exist; and every resource kind has a `Need` node, so
+  no `SATISFIES` edge can be silently dropped.
+- **`src/lib/intake/__tests__/`** — the extractor, with no network and no database.
 
-Two properties of this shape are what make the demo behave like a real system
-rather than a tuned one:
-
-- `wHazardNode = 30.0` is larger than any plausible time saving, so a route
-  through a live footprint can never win on speed alone.
-- `floodRisk` is a **forecast**, weighted; `BLOCKED_BY` is a **fact**, absolute.
-  A risky-but-open road stays on the table with a penalty; a blocked road is not
-  scored at all, because it never survives the traversal.
-
-**The baseline winner, term by term** — this is exactly how `38.7` is built:
-
-| Term | Arithmetic | Contribution |
-|---|---|---:|
-| Travel time | `21 min × 1.0` | **+21.00** |
-| Route flood exposure | `1.55 × 12.0` | **+18.60** |
-| Worst single segment | `0.50 × 10.0` | **+5.00** |
-| Active hazard zones crossed | `0 × 30.0` | **0.00** |
-| Destination capacity | `50 free × −0.25` | **−12.50** |
-| Distance to medicine | `300 m ÷ 100 × 1.2` | **+3.60** |
-| Responder pickup | `5 min × 0.6` | **+3.00** |
-| | | **= 38.70** |
-
-And the same arithmetic after Riverside Road floods, for the route that wins
-instead: `25 + (0.85 × 12) + (0.50 × 10) + 0 − (20 × 0.25) + (600÷100 × 1.2) +
-(7 × 0.6)` = **46.6**. The flooded corridor's own best surviving route to Patan
-scores **73.1**, because it now crosses one node inside the active footprint —
-a single `+30.0` term, contributed by the graph.
+`npm run truth` is separate and blunter: it drives all four demo states through the live
+graph and fails if any scripted outcome stops being a property of the data.
 
 ---
 
-## API surface
-
-All routes are server-side and hit Neo4j directly. Failures return
-`503 GRAPH_UNAVAILABLE` rather than a fabricated answer.
-
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/api/health` | Neo4j connectivity + version |
-| `GET` | `/api/graph` | The whole world as `{nodes, edges}` for the graph view |
-| `GET` | `/api/scenario` | Live counters, active hazards, blocked segments, district geometry |
-| `POST` | `/api/scenario/reset` | Return the graph to the seeded baseline |
-| `GET` | `/api/recommendation/[familyId]` | Recommendation without persisting a `(:Plan)` |
-| `POST` | `/api/route/recommend` | `{ familyId, persist? }` — recommend; **persists a `(:Plan)` by default**, pass `persist: false` to skip |
-| `GET` | `/api/explanation/[planId]` | The ordered chain of relationships behind a persisted plan |
-| `POST` | `/api/events/hazard` | `{ hazardId, active? }` — activate/deactivate a hazard |
-| `POST` | `/api/events/road-block` | `{ segmentId }` — close one road from the field |
-| `POST` | `/api/events/shelter-full` | `{ shelterId }` — take a shelter to capacity |
-| `POST` | `/api/events/volunteer` | `{ volunteerId, status? }` — stand a responder down |
-| `POST` | `/api/intake` | `{ familyId, text?, structured? }` — parse a household's situation and write its needs onto the graph |
-| `POST` | `/api/bulletin` | `{ text }` — turn a free-text field update into controlled graph writes, returning a structured diff |
-
----
-
-## Testing
-
-```bash
-npx vitest run tests/      # everything
-npm run test               # same, via package.json
-npm run truth              # five scenario states + 9 expectations, printed
-```
-
-| File | Kind | Covers |
-|---|---|---|
-| [`tests/scoring.test.ts`](tests/scoring.test.ts) | **pure**, no database | Referential integrity of `world.ts` (every `from`/`to`, `locationId`, `holderId`, `vehicleId`, `needId`, hazard `blocks`/`affects` and `NEAR` endpoint resolves), network connectivity, the accessibility traps the demo depends on, value ranges, and the published scoring weights |
-| [`tests/graph.test.ts`](tests/graph.test.ts) | **integration**, live Neo4j Aura | The eight safety guarantees below, plus the second-order effect |
-
-`tests/graph.test.ts` runs against the real Aura instance. It calls
-`resetToBaseline()` in `beforeEach` and again in `afterAll`, so every test starts
-from the deterministic seeded state and the suite is safe to run repeatedly.
-Disruptions are applied through the **same service functions the API routes
-call**, so the tests exercise the production path.
-
-What it guarantees:
-
-1. **A blocked road never appears in a returned safe route** — after the flood,
-   no plan's route *or pickup leg* touches `seg_chowk_bend`,
-   `seg_riverside_road` or `seg_depot_chowk_link`, and neither does anything the
-   map draws.
-2. **An inaccessible shelter is rejected** — `shelter_thapa_ground` is never a
-   destination for the Sharmas, and appears in `rejected` with
-   `reasonCode: 'not_step_free'`.
-3. **A shelter at capacity is rejected** — `shelter_market_hall` is
-   `at_capacity` at baseline; filling `shelter_patan_relief` removes it from
-   every plan.
-4. **Removing the recommended road produces a different viable route** — the
-   best destination moves from Patan Community Relief Center to Hillcrest School
-   Relief Point.
-5. **An unavailable volunteer is never used** — standing Maya down moves the
-   plan to Arun Thapa, and Maya appears in no plan.
-6. **A required medical resource is satisfied** — the winning plan's care site
-   stocks `asthma_medication`, and so does every alternative offered.
-7. **A no-route scenario identifies the unmet link** — with both accessible
-   responders down, the response is `no_route` with a `need_transport` missing
-   link naming Sunita Lama, 3.2 km outside the zone.
-8. **Reset restores deterministic state** — after three separate disruptions,
-   `resetToBaseline()` reproduces the baseline recommendation exactly: same
-   destination, same responder, same score, same road list.
-9. **Second-order effect** — the flood changes the destination **and** the
-   responder, because it severs Maya's depot: `stagedAtId` moves from
-   `loc_ward4_depot` to `loc_south_transit_yard`.
-
-`vitest.config.ts` maps the `@/…` alias to `./src`, loads `.env.local` via
-`tests/setup.ts`, uses a 30 s timeout for the remote instance, and disables
-parallelism — the graph is shared, mutable state, and two files mutating it at
-once would make `resetToBaseline()` meaningless.
-
----
-
-## Project layout
+## Project structure
 
 ```
-src/
-  app/api/…                    route handlers — thin; all reasoning is in Cypher
-  lib/
-    world/world.ts             the synthetic district — one source of truth
-    neo4j/
-      client.ts                driver, GraphUnavailableError, no offline fallback
-      schema.ts                constraints, indexes, and the model rationale
-      seed.ts                  seedAll() · resetToBaseline()
-      queries/
-        recommend.ts           THE core traversal + WEIGHTS
-        rejected.ts            why every other destination was ruled out
-        missingLink.ts         which single relaxed constraint restores a plan
-        plans.ts               persist · invalidate · explain
-        events.ts              disruptions as graph writes
-        graphSnapshot.ts       the whole world as {nodes, edges}
-    service/                   recommendation.ts · scenario.ts · api.ts
-    intake/                    deterministic extraction — pure, no Neo4j
-  components/                  map (MapLibre) · graph (Cytoscape) · command centre
-scripts/                       init-neo4j · seed-demo · reset-demo · truth-table
-tests/                         scoring.test.ts (pure) · graph.test.ts (live graph)
-docs/                          GRAPH_MODEL.md
+lifeline/
+├── src/
+│   ├── app/
+│   │   ├── api/                  route handlers (thin; all reasoning is Cypher)
+│   │   ├── page.tsx              hero, district drawn from the world data
+│   │   └── command/page.tsx      command center
+│   ├── components/
+│   │   ├── command/              scene machine, header, situation, plan band, overlays
+│   │   ├── map/                  MapLibre synthetic world, markers, tooltip
+│   │   └── graph/                Cytoscape live graph, deterministic layout
+│   └── lib/
+│       ├── neo4j/client.ts       driver, failure mapping, query trace
+│       ├── neo4j/queries/        one concern per file
+│       ├── neo4j/seed.ts         seed + deterministic reset
+│       ├── service/              recommendation and scenario orchestration
+│       ├── intake/               rules extractor, LLM client, controlled graph writes
+│       ├── world/world.ts        the district: single source of truth for seed AND map
+│       └── types.ts              contracts shared by API, map, graph and UI
+├── scripts/                      init, seed, reset, truth table, maplibre worker
+├── tests/                        integration tests against Aura
+└── docs/GRAPH_MODEL.md           deeper graph reference
 ```
 
----
-
-## Screenshots
-
-> Place images at these paths; the links below will resolve.
-
-| | |
-|---|---|
-| **Command centre — baseline plan** | ![Command centre showing the baseline recommendation](docs/screenshots/01-baseline.png) |
-| **Map — route, hazard footprints, district** | ![Map view with the safe route drawn over the district](docs/screenshots/02-map-route.png) |
-| **Graph view — the reasoning chain** | ![Graph view lighting the traversal in order](docs/screenshots/03-graph-chain.png) |
-| **After the flood — a different path and a different responder** | ![The recomputed plan after Riverside Road floods](docs/screenshots/04-after-flood.png) |
-| **Missing link — the one relationship that would restore a plan** | ![No-route state naming the missing accessible responder](docs/screenshots/05-missing-link.png) |
-| **Judge panel — the Cypher that actually ran** | ![Graph trace showing executed queries and timings](docs/screenshots/06-graph-trace.png) |
+`world.ts` is deliberately the single source of truth for **both** the Neo4j seed and the
+map geometry, so the rendered world and the reasoned-over world cannot drift apart.
 
 ---
 
-## Safety and ethics
+## Safety, ethics and limitations
 
-**Lifeline is decision-support for coordination. It is not an authoritative
-emergency service.**
+- Every recommendation carries: *Recommended based on currently available information ·
+  Conditions may change · Follow official emergency instructions · Call local emergency
+  services for immediate life-threatening danger.*
+- All data is fictional and labelled as simulation on every screen.
+- Lifeline is decision-support for coordination. It does not dispatch responders and does
+  not replace official warnings.
+- **Before any real pilot**, this would need: real road, bridge and shelter data kept
+  current by the municipality; corroboration of crowd reports from several sources before a
+  road is closed for everyone; channels that work on feature phones and during outages, in
+  Nepali and local languages; a named human approving authority-side actions with an audit
+  trail; and a clear line of responsibility with the official response.
+- Routing quality is bounded by the graph. A road marked open that is not open produces a
+  confidently wrong answer, which is why `BLOCKED_BY` carries the hazard as structure and
+  why every recommendation shows its evidence rather than only its conclusion.
 
-- **All data is synthetic.** The district, the households, the volunteers, the
-  clinics and the hazards in `src/lib/world/world.ts` are invented for
-  simulation. Coordinates sit near 27.67 N / 85.32 E only so that map
-  projection, scale bars and distance arithmetic behave realistically. Nothing
-  here describes a real emergency, real infrastructure, or real people.
-- **Not a routing authority.** Travel times, flood risks and road statuses are
-  simulation values. They are not survey data, not live sensor feeds, and not a
-  substitute for on-the-ground assessment.
-- **Follow official emergency instructions.** Where guidance from Lifeline and
-  guidance from an emergency authority differ, the authority is correct.
-- **In life-threatening danger, call your local emergency services.** Do not
-  wait for a tool.
-- **Human in the loop, always.** Lifeline is built to explain itself — every
-  recommendation exposes the chain of relationships it depends on and the
-  reasons other options were rejected — precisely so a coordinator can overrule
-  it. A recommendation is a starting point for a decision a person makes.
-- **The LLM never decides anything safety-critical.** It is used only to parse
-  free text into a validated schema, and only as a supplement to a
-  deterministic rule extractor. Routing, ranking and rejection are Neo4j.
-- **No real personal data.** Do not paste real names, addresses, medical details
-  or contact information into the intake box in a demo environment.
+---
+
+## Roadmap
+
+- **Responder mode** — invert the question from "where does this family go?" to "which
+  single intervention unblocks the most households?" The graph already supports it:
+  `HAZARD_RIPPLE_CYPHER` measures downstream connectivity from any change.
+- **Graph Data Science** — weighted shortest paths and capacity-constrained assignment once
+  there are hundreds of households rather than three.
+- **MCP for Aura** — expose the same read queries to an operator's assistant.
+- **Document ingestion** — municipal shelter lists and situation reports into graph updates.
