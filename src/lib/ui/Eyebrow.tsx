@@ -6,16 +6,16 @@ export interface EyebrowProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * Tiny uppercase tracking-wide label used above panel titles, stat
- * groups, and section headers. Fixed at 12px (Tailwind's `text-xs`) --
- * the floor for legible text in this app -- and text-secondary for
- * guaranteed AA contrast at that size.
+ * The smallest register in the type scale: 11px, uppercase, tracked to
+ * 0.14em. Wide tracking is what makes an 11px uppercase label legible --
+ * set tight, the same size reads as a smudge. Held at text-secondary
+ * (8.1:1 on the panel surface), comfortably past AA even at this size.
  */
 export function Eyebrow({ children, className, ...props }: EyebrowProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary",
+        "inline-flex items-center gap-1.5 text-micro font-semibold text-text-secondary uppercase",
         className,
       )}
       {...props}

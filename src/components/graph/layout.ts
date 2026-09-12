@@ -42,13 +42,13 @@ export interface Point {
  * is still right and every relative position is preserved — which is what
  * "roughly mirroring the real geography" has to mean inside a side panel.
  *
- * The whole board is tuned to a ~2.2 landscape aspect on purpose. The host
+ * The whole board is tuned to a ~1.9 landscape aspect on purpose. The host
  * panel swings between roughly 379x490 (no plan yet) and 379x164 (plan and
  * score breakdown showing), i.e. viewport aspects 0.8 to 2.3. A board wider
  * than the tallest viewport aspect keeps `fit()` width-bound in BOTH states,
  * so the graph does not collapse to a smudge the moment a plan appears.
  */
-const LATTICE = { x0: 296, y0: -165, width: 320, height: 330 };
+const LATTICE = { x0: 296, y0: -235, width: 306, height: 470 };
 
 /**
  * X position of each vertical band — the left-to-right narrative
@@ -68,34 +68,43 @@ const BAND_X: Record<string, number> = {
   resource: LATTICE.x0 + LATTICE.width + 200,
 };
 
-/** Minimum vertical gap inside each column. Tuned to the ~2.2 board aspect. */
+/** Minimum vertical gap inside each column. Tuned to the ~1.9 board aspect. */
 const GAP = {
-  family: 122,
-  person: 26,
-  need: 30,
-  volunteer: 34,
-  vehicle: 30,
+  family: 168,
+  person: 31,
+  need: 35,
+  volunteer: 38,
+  vehicle: 35,
   destination: 40,
   care: 34,
-  resource: 22,
+  resource: 27,
   hazard: 34,
   alert: 30,
 };
 
 const HAZARD_LIFT = 46;
+/** A hazard must end up at least this far from any node already placed. */
+const HAZARD_CLEARANCE = 30;
 const ALERT_ROW_Y = LATTICE.y0 - 86;
 
 /** Segments are pushed at least this far from any Location node. */
-const LATTICE_MIN_SEPARATION = 21;
+const LATTICE_MIN_SEPARATION = 28;
 /** ...and this far from each other. */
-const SEGMENT_MIN_SEPARATION = 17;
+const SEGMENT_MIN_SEPARATION = 23;
 /** Locations may be nudged apart by at most this much from their true projection. */
-const LOCATION_MIN_SEPARATION = 24;
-const LOCATION_MAX_DRIFT = 18;
+const LOCATION_MIN_SEPARATION = 32;
+const LOCATION_MAX_DRIFT = 26;
 /** Relaxation step size. Below 1 so wedged nodes settle instead of oscillating. */
 const RELAX_DAMPING = 0.55;
 /** How far a Segment sits off the straight line between its two Locations. */
-const SEGMENT_PERPENDICULAR_OFFSET = 13;
+const SEGMENT_PERPENDICULAR_OFFSET = 16;
+/**
+ * Needs and people that no household currently holds (capabilities the district
+ * can supply but nobody has asked for, e.g. insulin or oxygen) get their own
+ * sub-column. Stacking them in the main band put them on top of the needs that
+ * ARE held, because both were anchored near the lattice midline.
+ */
+const ORPHAN_SUBCOLUMN_OFFSET = 36;
 
 /** District bbox — FIXED, from the world seed, never from the payload. */
 const GEO_BOUNDS = (() => {
@@ -263,7 +272,7 @@ export function computeLayout(index: GraphIndex): Map<string, Point> {
     }
   }
   for (const [id, y] of stackAround(orphanPeople, latticeMidY, GAP.person)) {
-    pos.set(id, { x: BAND_X.person, y });
+    pos.set(id, { x: BAND_X.person + ORPHAN_SUBCOLUMN_OFFSET, y });
   }
 
   /* --- 3. Needs sit beside whoever holds them ---------------------- */
@@ -289,7 +298,7 @@ export function computeLayout(index: GraphIndex): Map<string, Point> {
     }
   }
   for (const [id, y] of stackAround(orphanNeeds, latticeMidY, GAP.need)) {
-    pos.set(id, { x: BAND_X.need, y });
+    pos.set(id, { x: BAND_X.need + ORPHAN_SUBCOLUMN_OFFSET, y });
   }
 
   /* --- 4. Responder band: volunteers, then their vehicles ---------- */
@@ -458,7 +467,23 @@ export function computeLayout(index: GraphIndex): Map<string, Point> {
         ? xs.reduce((a, b) => a + b, 0) / xs.length
         : LATTICE.x0 + hash01(`${hazard.id}hx`) * LATTICE.width;
     }
-    pos.set(hazard.id, { x, y: hazardY.get(hazard.id) ?? LATTICE.y0 - HAZARD_LIFT });
+    let y = hazardY.get(hazard.id) ?? LATTICE.y0 - HAZARD_LIFT;
+    // Hazards are positioned from the mean of what they block, which can drop
+    // one straight on top of a Location that was already placed. Lift it clear
+    // rather than leaving a hazard glyph sitting inside a road junction.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      let clash = false;
+      for (const [otherId, p] of pos) {
+        if (otherId === hazard.id) continue;
+        if (Math.hypot(p.x - x, p.y - y) < HAZARD_CLEARANCE) {
+          clash = true;
+          break;
+        }
+      }
+      if (!clash) break;
+      y -= HAZARD_CLEARANCE * 0.6;
+    }
+    pos.set(hazard.id, { x, y });
   }
 
   const alerts = nodesOfType(index, "alert");

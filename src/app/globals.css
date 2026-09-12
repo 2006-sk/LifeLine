@@ -50,7 +50,7 @@
      text-primary: near-white with a faint warm cast (not clinical blue-white),
      so it sits *against* the cold surfaces instead of dissolving into them.
      Contrast measured against --color-surface-raised, the busiest surface:
-     secondary ~9.9:1, tertiary ~6.6:1 -- both clear WCAG AA at 11px.
+     secondary 8.1:1, tertiary 5.5:1 -- both clear WCAG AA at 11px.
      text-disabled intentionally sits below AA -- disabled content is exempt
      from the 1.4.3 contrast requirement. */
   --color-text-primary: #f4f3ef;
@@ -65,10 +65,14 @@
      the hue rotated a few degrees bluewards, which (a) stops it reading as
      neon and (b) opens the gap to --color-safe so the "recommended route" and
      "clear" never get confused on the map at a glance.
-     On-accent text is --color-surface-sunken: 8.6:1. Never white on accent. */
+     On-accent text is --color-surface-sunken: 9.3:1. Never white on accent. */
   --color-accent: #2cbfdb;
   --color-accent-surface: rgba(44, 191, 219, 0.12);
   --color-accent-glow: rgba(44, 191, 219, 0.32);
+  /* Pressed/hover fills. A lit control gets *brighter*, never more
+     transparent -- an opacity-modifier hover on a dark surface makes a button
+     darker on hover, which reads as the control receding from the cursor. */
+  --color-accent-hi: #55d3ea;
 
   /* -- Semantic status colors -------------------------------------------
      Each family is base / surface (low-alpha fill for badges & tints) /
@@ -78,12 +82,13 @@
      distinguishable from "danger" red for red-green color-blind users. Hue is
      never the only signal in the UI -- pair these with the --stroke-dash-*
      pattern tokens and StatusPill's glyphs below.
-     Each base clears 4.5:1 on --color-surface-raised as text, and carries
-     --color-surface-sunken as its on-fill colour (danger 6.3:1, warning
-     11.6:1, safe 10.9:1). */
+     Each base clears 4.5:1 on --color-surface-raised as text (danger 6.1:1,
+     warning 10.2:1, safe 9.5:1, info 7.5:1) and carries --color-surface-sunken
+     as its on-fill colour (danger 6.6:1, warning 11.1:1, safe 10.4:1). */
   --color-danger: #ff5a4e;
   --color-danger-surface: rgba(255, 90, 78, 0.12);
   --color-danger-glow: rgba(255, 90, 78, 0.32);
+  --color-danger-hi: #ff7a70;
 
   --color-warning: #ffb020;
   --color-warning-surface: rgba(255, 176, 32, 0.12);
@@ -101,7 +106,7 @@
      A real scale, not a soup of 11/12/13. Four registers, each with its own
      job, and genuine ratio between them (11 -> 14 -> 22 -> 34):
 
-       micro    11  uppercase eyebrows, axis labels. Tracked wide, 600.
+       micro    11  uppercase eyebrows, axis labels. Tracked wide.
        label    12  dense UI labels, chip and pill text.
        body     14  the reading size. Everything prose-shaped.
        heading  17  panel titles.
@@ -115,7 +120,6 @@
   --text-micro: 0.6875rem;
   --text-micro--line-height: 1.18;
   --text-micro--letter-spacing: 0.14em;
-  --text-micro--font-weight: 600;
 
   --text-xs: 0.75rem;
   --text-xs--line-height: 1.35;
@@ -124,7 +128,6 @@
   --text-label: 0.75rem;
   --text-label--line-height: 1.35;
   --text-label--letter-spacing: 0.01em;
-  --text-label--font-weight: 500;
 
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.5;
@@ -185,20 +188,30 @@
   /* -- Shadows ------------------------------------------------------------
      Elevation is built, not smudged. Every elevation token is a stack:
        1. an inner top highlight   -- the lit edge of a physical bezel
-       2. a hairline ring          -- separation that survives on any surface
-       3. a tight contact shadow   -- what glues the object to the surface
-       4. a wide ambient shadow    -- what tells you how far off it floats
+       2. an inner bezel line      -- the second, fainter, concentric edge
+       3. a hairline ring          -- separation that survives on any surface
+       4. a tight contact shadow   -- what glues the object to the surface
+       5. a wide ambient shadow    -- what tells you how far off it floats
      Shadows are tinted with the surface's own cold near-black (#02040a)
      rather than pure `rgba(0,0,0,.3)`, which reads as a grey smear on a
      tinted background. */
   --shadow-panel:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.045), 0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 1px 2px -1px rgba(2, 4, 10, 0.9), 0 10px 20px -12px rgba(2, 4, 10, 0.85),
-    0 28px 52px -32px rgba(2, 4, 10, 0.95);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.045), inset 0 0 0 1px rgba(255, 255, 255, 0.022),
+    0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 2px -1px rgba(2, 4, 10, 0.9),
+    0 10px 20px -12px rgba(2, 4, 10, 0.85), 0 28px 52px -32px rgba(2, 4, 10, 0.95);
   --shadow-elevated:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.07),
     0 2px 4px -2px rgba(2, 4, 10, 0.95), 0 18px 32px -16px rgba(2, 4, 10, 0.9),
     0 48px 80px -40px rgba(2, 4, 10, 1);
+  /* The machined seam: a dark groove with a lit edge on the light-facing
+     side, used wherever two plates meet (panel header, dividers). One flat
+     grey 1px line is the thing that makes an interface look auto-generated. */
+  --color-groove: rgba(2, 4, 10, 0.6);
+  --shadow-seam: 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  --shadow-seam-x: 1px 0 0 0 rgba(255, 255, 255, 0.04);
+  /* The lit top lip of a small raised object (pills, badges). */
+  --shadow-lip: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+
   --shadow-well:
     inset 0 1px 2px 0 rgba(2, 4, 10, 0.75), inset 0 0 0 1px rgba(255, 255, 255, 0.022);
   --shadow-control:
@@ -206,6 +219,14 @@
   --shadow-control-raised:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.14), 0 1px 2px 0 rgba(2, 4, 10, 0.7),
     0 6px 14px -8px rgba(2, 4, 10, 0.9);
+  /* Filled controls on hover: the bezel highlight brightens and a tight
+     tinted ring appears. A ring, not a neon halo -- see --shadow-glow-*. */
+  --shadow-control-accent:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2), 0 0 0 1px var(--color-accent-glow),
+    0 2px 4px -2px rgba(2, 4, 10, 0.8), 0 8px 18px -10px var(--color-accent-glow);
+  --shadow-control-danger:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2), 0 0 0 1px var(--color-danger-glow),
+    0 2px 4px -2px rgba(2, 4, 10, 0.8), 0 8px 18px -10px var(--color-danger-glow);
 
   /* Tinted emphasis for status surfaces. Deliberately NOT a neon outer glow:
      a tight 1px ring plus a short, low-alpha bloom -- enough to say "this one"
@@ -386,8 +407,10 @@
 
 @layer components {
   /* The command panel: the base surface every console module sits in.
-     It is an enclosure, not a rectangle -- a lit top edge, a hairline ring,
-     a contact shadow and an ambient shadow, over a surface that is very
+     It is an enclosure, not a rectangle -- a lit top edge, a second fainter
+     bezel line just inside it (--shadow-panel, inset ring: same pixels a
+     pseudo-element would draw, without the extra stacking context), a
+     hairline ring and two shadows, over a surface that is very
      slightly brighter at the top than the bottom (so the light in the scene
      always comes from one place).
 
@@ -396,7 +419,6 @@
      context every frame. Use `.chrome-blur` for fixed/sticky chrome instead. */
   .panel {
     position: relative;
-    isolation: isolate;
     background-color: var(--color-surface-raised);
     background-image: linear-gradient(
       180deg,
@@ -408,19 +430,6 @@
     box-shadow: var(--shadow-panel);
   }
 
-  /* Inner bezel: a second, fainter line just inside the outer edge, at a
-     concentric radius. This is the whole difference between "div with a
-     border" and "machined enclosure", and it costs one pseudo-element. */
-  .panel::before {
-    content: "";
-    position: absolute;
-    inset: 1px;
-    z-index: -1;
-    border-radius: calc(var(--radius-lg) - 1px);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.022);
-    pointer-events: none;
-  }
-
   .panel-header {
     display: flex;
     align-items: center;
@@ -429,8 +438,8 @@
     padding: 0.875rem var(--spacing-panel);
     /* Two-tone rule: a dark groove with a lit edge under it, the way a real
        seam between two plates catches light. One flat 1px line does not. */
-    border-bottom: 1px solid rgba(2, 4, 10, 0.55);
-    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.035);
+    border-bottom: 1px solid var(--color-groove);
+    box-shadow: var(--shadow-seam);
   }
 
   /* Sunken enclosure for content nested inside a panel: forms, code blocks,
@@ -514,8 +523,9 @@
   }
 }
 
-/* Reduced motion: spatial motion collapses to a fast crossfade rather than
-   snapping between states with nothing in between. */
+/* Reduced motion: every animation and transition in the app resolves to its
+   end state immediately. Nothing here depends on a transition to become
+   legible, so cutting the motion costs no information. */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

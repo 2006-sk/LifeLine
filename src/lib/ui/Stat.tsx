@@ -75,7 +75,12 @@ function DeltaArrow({
   );
 }
 
-/** Big number + label, with an optional trend delta. Value uses tabular figures. */
+/**
+ * The display register of the type scale: one number at 28px in Plex Mono,
+ * tabular, against a 12px label -- a 2.3x jump, so the readout wins the eye
+ * from across a room. Mono is the "this is instrument data" signal; digits are
+ * tabular so a ticking count never shifts the layout under it.
+ */
 export function Stat({ label, value, unit, eyebrow, delta, className }: StatProps) {
   const deltaTone = delta?.tone ?? "info";
 
@@ -83,17 +88,15 @@ export function Stat({ label, value, unit, eyebrow, delta, className }: StatProp
     <div className={cn("flex flex-col gap-1.5", className)}>
       {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
       <div className="flex items-baseline gap-1.5">
-        <span className="tabular text-3xl font-semibold leading-none text-text-primary">
-          {value}
-        </span>
-        {unit && <span className="text-sm font-medium text-text-tertiary">{unit}</span>}
+        <span className="tabular font-mono text-data-lg text-text-primary">{value}</span>
+        {unit && <span className="text-label font-medium text-text-tertiary">{unit}</span>}
       </div>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-text-secondary">{label}</span>
+        <span className="text-label font-medium text-text-secondary">{label}</span>
         {delta && (
           <span
             className={cn(
-              "tabular inline-flex items-center gap-1 text-xs font-semibold",
+              "tabular inline-flex items-center gap-1 font-mono text-micro font-semibold",
               toneTextClass[deltaTone],
             )}
           >

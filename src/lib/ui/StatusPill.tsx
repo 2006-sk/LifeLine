@@ -95,7 +95,8 @@ export function StatusPill({ tone, label, className, ...props }: StatusPillProps
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-micro font-semibold uppercase",
+        "shadow-lip",
         classes,
         className,
       )}

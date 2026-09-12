@@ -35,7 +35,11 @@
   inset: 0;
   pointer-events: none;
   z-index: 3;
-  background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+  background: radial-gradient(
+    ellipse at center,
+    transparent 58%,
+    color-mix(in srgb, var(--bg-base, #07090c) 58%, transparent) 100%
+  );
 }
 
 .lfl-map-root .maplibregl-canvas:focus {
@@ -181,13 +185,16 @@
   border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
   background: color-mix(in srgb, var(--bg-base, #07090c) 96%, var(--text-primary, #e8edf2));
   font-size: 10px;
+  line-height: 1.25;
   letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--text-primary, #e8edf2) 82%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--bg-base, #07090c) 70%, transparent);
   pointer-events: none;
 }
 
 .lfl-card { display: grid; gap: 3px; min-width: 88px; }
-.lfl-card-title { font-size: 10px; font-weight: 600; }
+.lfl-card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.01em; }
 .lfl-card-meta {
   font-size: 9px;
   font-variant-numeric: tabular-nums;
@@ -279,9 +286,16 @@
 
 .lfl-loc-name {
   font-size: 9.5px;
-  letter-spacing: 0.04em;
+  font-weight: 500;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  text-shadow: 0 1px 3px var(--bg-base, #07090c), 0 0 6px var(--bg-base, #07090c);
+  text-shadow:
+    0 0 2px var(--bg-base, #07090c),
+    1px 0 3px var(--bg-base, #07090c),
+    -1px 0 3px var(--bg-base, #07090c),
+    0 1px 3px var(--bg-base, #07090c),
+    0 -1px 3px var(--bg-base, #07090c),
+    0 0 8px var(--bg-base, #07090c);
 }
 
 .lfl-loc--watch .lfl-loc-dot { background: var(--warn, #f5a524); }
@@ -352,8 +366,9 @@
 .lfl-hz-name {
   font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
+  text-shadow: 0 0 4px color-mix(in srgb, var(--bg-base, #07090c) 85%, transparent);
 }
 
 .lfl-hz--flood { --lfl-marker-tint: #4fa3f0; }
@@ -384,7 +399,7 @@
 }
 
 .lfl-tip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.lfl-tip-title { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+.lfl-tip-title { font-size: 12.5px; font-weight: 600; line-height: 1.25; letter-spacing: -0.005em; }
 .lfl-tip-kind {
   font-size: 9px;
   letter-spacing: 0.1em;
@@ -448,11 +463,14 @@
 
 .lfl-legend {
   display: grid;
-  gap: 10px;
-  padding: 11px 13px;
+  gap: 11px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid var(--border-hairline, rgba(255, 255, 255, 0.08));
-  background: color-mix(in srgb, var(--bg-base, #07090c) 88%, transparent);
+  background: color-mix(in srgb, var(--bg-base, #07090c) 86%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg-base, #07090c) 78%, transparent);
   color: var(--text-primary, #e8edf2);
   font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
   font-size: 11px;
@@ -462,9 +480,10 @@
 
 .lfl-legend-title {
   font-size: 9px;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--text-primary, #e8edf2) 45%, transparent);
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 56%, transparent);
 }
 
 .lfl-legend-item { display: flex; align-items: center; gap: 8px; }
@@ -477,7 +496,10 @@
   height: 14px;
 }
 
-.lfl-legend-label { color: color-mix(in srgb, var(--text-primary, #e8edf2) 80%, transparent); }
+.lfl-legend-label {
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--text-primary, #e8edf2) 84%, transparent);
+}
 
 .lfl-legend-line { display: block; width: 26px; height: 0; border-top-style: solid; }
 .lfl-legend-line--route { border-top-width: 3px; border-top-color: var(--accent, #35d6ff); box-shadow: 0 0 8px var(--accent, #35d6ff); }
@@ -606,4 +628,45 @@
   .lfl-pulse-ring { opacity: 0.35; transform: scale(1.35); }
   .lfl-scan { display: none; }
   .lfl-flash { opacity: 0.5; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Subject household.
+ * Three families are monitored, but only one is the subject of the
+ * current plan. Identical pins made the routed home indistinguishable
+ * from its neighbours, so the subject is promoted and the others are
+ * recessed. Distinction is weight and a written tag, never hue alone.
+ * ------------------------------------------------------------------ */
+.lfl-marker--family:not(.is-subject) > * {
+  opacity: 0.55;
+}
+.lfl-marker--family:not(.is-subject) .lfl-pin {
+  transform: scale(0.86);
+}
+.lfl-marker--family.is-subject {
+  z-index: 6;
+}
+.lfl-marker--family.is-subject .lfl-pin {
+  transform: scale(1.1);
+  box-shadow:
+    0 0 0 2px var(--bg-base, #07090c),
+    0 0 0 3.5px var(--danger, #ff4d5e),
+    0 0 18px -2px var(--danger, #ff4d5e);
+}
+.lfl-marker--family.is-subject .lfl-chip {
+  font-weight: 600;
+  color: var(--text-primary, #e8edf2);
+  border-color: color-mix(in srgb, var(--danger, #ff4d5e) 45%, transparent);
+}
+.lfl-chip-tag {
+  margin-left: 0.45em;
+  padding: 0.1em 0.42em;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--danger, #ff4d5e) 22%, transparent);
+  color: var(--danger, #ff4d5e);
+  font-size: 0.82em;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }

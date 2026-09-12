@@ -4,6 +4,8 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/lib/ui/Button";
 import { Eyebrow } from "@/lib/ui/Eyebrow";
+import { Glyph } from "./Glyph";
+import { DURATION, EASE_OUT } from "./motion";
 import type { LifelineController } from "./useLifeline";
 
 interface SceneActions {
@@ -19,7 +21,7 @@ interface Scene {
 
 /**
  * A guided run of the exact demo sequence. It drives the SAME actions the
- * buttons do — there is no scripted playback and no canned data, so if the
+ * buttons do. There is no scripted playback and no canned data, so if the
  * graph disagrees the story visibly changes with it.
  */
 const SCENES: Scene[] = [
@@ -37,13 +39,13 @@ const SCENES: Scene[] = [
   },
   {
     title: "The world changes",
-    body: "Riverside Road floods. Watch the route break on the map and the relationships collapse in the graph — including the responder whose depot is now cut off.",
+    body: "Riverside Road floods. Watch the route break on the map and the relationships collapse in the graph, including the responder whose depot is now cut off.",
     cta: "Flood Riverside Road",
     run: (c) => c.floodRiversideRoad(),
   },
   {
     title: "A different path lights up",
-    body: "Lifeline re-traverses the remaining network. The destination changes, and so does the responder — because the graph, not a script, decided both.",
+    body: "Lifeline re-traverses the remaining network. The destination changes, and so does the responder, because the graph decided both. Nothing here is scripted.",
     cta: "Fill the new shelter",
     run: (c) => c.fillShelter("shelter_hillcrest"),
   },
@@ -84,9 +86,10 @@ export function StoryMode({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="absolute right-3 bottom-3 z-10 rounded-full border border-hairline bg-surface-raised/90 px-3.5 py-2 text-[12px] font-medium text-text-secondary backdrop-blur-sm transition-colors hover:border-accent/50 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+        className="absolute right-3 bottom-3 z-10 inline-flex items-center gap-2 rounded-full border border-hairline bg-surface-raised/90 px-3.5 py-2 text-[12px] font-medium text-text-secondary backdrop-blur-sm [transition-property:color,background-color,border-color,transform] duration-150 hover:border-accent/50 hover:text-accent active:scale-[0.97]"
       >
-        ▷ Story mode
+        <Glyph name="play" className="h-2.5 w-2.5" />
+        Story mode
       </button>
     );
   }
@@ -94,9 +97,9 @@ export function StoryMode({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 14, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DURATION.swap, ease: EASE_OUT } }}
+        exit={{ opacity: 0, y: 10, scale: 0.99, transition: { duration: DURATION.exit, ease: EASE_OUT } }}
         className="absolute right-3 bottom-3 z-20 w-[min(380px,calc(100%-1.5rem))] rounded-[var(--radius-lg)] border border-hairline bg-surface-raised/95 p-4 shadow-[var(--shadow-elevated)] backdrop-blur-[var(--blur-panel)]"
       >
         <div className="flex items-start justify-between gap-3">
@@ -110,9 +113,9 @@ export function StoryMode({
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Close story mode"
-            className="rounded p-1 text-text-tertiary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="-mt-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-white/5 hover:text-text-primary"
           >
-            ✕
+            <Glyph name="cross" className="h-3 w-3" />
           </button>
         </div>
         <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">{scene.body}</p>
@@ -124,7 +127,7 @@ export function StoryMode({
           <button
             type="button"
             onClick={() => setStep((s) => (s + 1) % SCENES.length)}
-            className="text-[12px] text-text-tertiary underline-offset-2 hover:text-accent hover:underline"
+            className="rounded-[var(--radius-sm)] px-1 text-[12px] text-text-tertiary underline-offset-2 transition-colors hover:text-accent hover:underline"
           >
             Skip
           </button>

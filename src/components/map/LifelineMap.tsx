@@ -26,7 +26,7 @@ import type {
   Marker as MapLibreMarker,
 } from "maplibre-gl";
 import type { RouteStep } from "@/lib/types";
-import { segmentById, world } from "@/lib/world/world";
+import { DEMO_FAMILY_ID, segmentById, world } from "@/lib/world/world";
 import {
   buildBlocked,
   buildHazards,
@@ -559,7 +559,7 @@ export default function LifelineMap({
   useEffect(() => {
     if (!ready) return;
     const store = staticMarkersRef.current;
-    for (const spec of buildStaticMarkers()) {
+    for (const spec of buildStaticMarkers(DEMO_FAMILY_ID)) {
       const marker = addMarker(spec);
       if (marker) store.set(spec.id, { marker, spec });
     }

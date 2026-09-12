@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/lib/ui/Button";
 import { Eyebrow } from "@/lib/ui/Eyebrow";
 import { cn } from "@/lib/ui/cn";
+import { Glyph } from "./Glyph";
+import { DURATION, EASE_OUT, SPRING_SETTLE } from "./motion";
 import type { LiveAlert } from "./useLifeline";
 
 /* ================================================================== */
@@ -15,50 +17,55 @@ export function AlertStack({ alerts, onDismiss }: { alerts: LiveAlert[]; onDismi
   return (
     <div className="pointer-events-none absolute top-3 left-1/2 z-40 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2">
       <AnimatePresence initial={false}>
-        {alerts.map((alert) => (
-          <motion.div
-            key={alert.id}
-            layout
-            initial={{ opacity: 0, y: -24, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -16, scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            role="status"
-            aria-live="polite"
-            className={cn(
-              "pointer-events-auto flex items-start gap-3 rounded-[var(--radius-md)] border px-4 py-3 backdrop-blur-[var(--blur-panel)]",
-              alert.severity >= 0.7
-                ? "border-danger/50 bg-danger-surface shadow-[var(--shadow-glow-danger)]"
-                : "border-warning/40 bg-warning-surface",
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn("mt-0.5 text-[13px]", alert.severity >= 0.7 ? "text-danger" : "text-warning")}
+        {alerts.map((alert) => {
+          const severe = alert.severity >= 0.7;
+          return (
+            <motion.div
+              key={alert.id}
+              layout
+              /* Enters from above, exits upward: the same direction, so the
+                 stack always reads as one column of things arriving and
+                 leaving. Never from scale(0) -- nothing appears from nothing.
+                 The spring is critically damped, so there is no bounce, and it
+                 retargets cleanly when a second alert lands mid-flight. */
+              initial={{ opacity: 0, y: -22, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING_SETTLE }}
+              exit={{ opacity: 0, y: -14, scale: 0.98, transition: { duration: DURATION.exit, ease: EASE_OUT } }}
+              role={severe ? "alert" : "status"}
+              aria-live={severe ? "assertive" : "polite"}
+              className={cn(
+                "pointer-events-auto flex items-start gap-3 rounded-[var(--radius-md)] border px-4 py-3 backdrop-blur-[var(--blur-panel)]",
+                severe
+                  ? "border-danger/55 bg-danger-surface shadow-[var(--shadow-glow-danger)]"
+                  : "border-warning/40 bg-warning-surface",
+              )}
             >
-              ▲
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold text-text-primary">{alert.title}</div>
-              <div className="text-[12px] leading-relaxed text-text-secondary">{alert.body}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onDismiss(alert.id)}
-              aria-label={`Dismiss alert: ${alert.title}`}
-              className="rounded p-1 text-text-tertiary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-            >
-              ✕
-            </button>
-          </motion.div>
-        ))}
+              <Glyph
+                name="alert"
+                className={cn("mt-[3px] h-3.5 w-3.5", severe ? "text-danger" : "text-warning")}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold text-text-primary">{alert.title}</div>
+                <div className="text-[12px] leading-relaxed text-text-secondary">{alert.body}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onDismiss(alert.id)}
+                aria-label={`Dismiss alert: ${alert.title}`}
+                className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-white/5 hover:text-text-primary"
+              >
+                <Glyph name="cross" className="h-3 w-3" />
+              </button>
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </div>
   );
 }
 
 /* ================================================================== */
-/* Why overlay — the explainability moment                             */
+/* Why overlay: the explainability moment                             */
 /* ================================================================== */
 
 export interface ExplanationLink {
@@ -164,7 +171,7 @@ export function WhyOverlay({
             initial={{ x: 40, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 40, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 340, damping: 34 }}
+            transition={{ type: "spring", stiffness: 340, damping: 37, mass: 1 }}
             className="flex h-full w-[min(560px,100vw)] flex-col border-l border-hairline bg-surface-raised"
           >
             <div className="flex items-start justify-between border-b border-hairline px-5 py-4">
@@ -197,15 +204,16 @@ export function WhyOverlay({
                         key={`${link.fromId}-${link.rel}-${link.toId}-${i}`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: DURATION.enter, ease: EASE_OUT }}
                         onMouseEnter={() => onHighlight(link.toId)}
                         onMouseLeave={() => onHighlight(null)}
                         className="rounded-[var(--radius-md)] border border-hairline bg-surface-sunken/70 p-3"
                       >
                         <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-text-tertiary">
                           <span className="text-accent">{link.fromLabel}</span>
-                          <span aria-hidden="true">—[</span>
+                          <span aria-hidden="true">-[</span>
                           <span className="text-safe">{link.rel}</span>
-                          <span aria-hidden="true">]→</span>
+                          <span aria-hidden="true">]-&gt;</span>
                           <span className="text-accent">{link.toLabel}</span>
                         </div>
                         <p className="mt-1 text-[13px] leading-relaxed text-text-secondary">{link.sentence}</p>
@@ -277,16 +285,16 @@ export function BulletinDialog({
           aria-label="Add field update"
         >
           <motion.div
-            initial={{ y: 16, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 16, opacity: 0 }}
+            initial={{ y: 14, opacity: 0, scale: 0.985 }}
+            animate={{ y: 0, opacity: 1, scale: 1, transition: { duration: DURATION.swap, ease: EASE_OUT } }}
+            exit={{ y: 10, opacity: 0, scale: 0.99, transition: { duration: DURATION.exit, ease: EASE_OUT } }}
             className="w-[min(640px,100%)] rounded-[var(--radius-lg)] border border-hairline bg-surface-raised p-5 shadow-[var(--shadow-elevated)]"
           >
             <Eyebrow>Field update</Eyebrow>
             <h2 className="mt-1 text-xl font-semibold tracking-tight text-text-primary">Add a disaster bulletin</h2>
             <p className="mt-1 text-[13px] leading-relaxed text-text-secondary">
-              Unstructured field information becomes structured graph updates. Only entities that already exist in the
-              district can be changed — nothing is invented.
+              Unstructured field information becomes structured graph updates. Only entities that already exist in
+              the district can be changed. Nothing is invented.
             </p>
             <textarea
               value={text}
@@ -298,16 +306,14 @@ export function BulletinDialog({
             {result && (
               <div className="mt-3 space-y-1.5 rounded-[var(--radius-md)] border border-hairline bg-surface-sunken p-3">
                 {result.applied.map((a, i) => (
-                  <div key={i} className="flex items-start gap-2 text-[12px] text-safe">
-                    <span aria-hidden="true">✓</span>
+                  <div key={i} className="flex items-start gap-2 text-[12px]">
+                    <Glyph name="check" className="mt-[3px] text-safe" />
                     <span className="text-text-secondary">{a.detail}</span>
                   </div>
                 ))}
                 {result.unmatched.map((u, i) => (
                   <div key={`u-${i}`} className="flex items-start gap-2 text-[12px]">
-                    <span aria-hidden="true" className="text-warning">
-                      ?
-                    </span>
+                    <Glyph name="question" className="mt-[3px] text-warning" />
                     <span className="text-text-tertiary">Not matched to a known entity: “{u}”</span>
                   </div>
                 ))}

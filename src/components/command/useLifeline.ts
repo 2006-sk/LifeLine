@@ -202,7 +202,7 @@ export function useLifeline(familyId: string) {
   );
 
   /* ---------------------------------------------------------------- */
-  /* Disruptions — the signature moment                                */
+  /* Disruptions: the signature moment                                 */
   /* ---------------------------------------------------------------- */
 
   interface DisruptionResponse {
@@ -233,11 +233,14 @@ export function useLifeline(familyId: string) {
         setImpact(result.impacted);
 
         // 3. Only claim the plan is compromised if the graph says this event
-        //    actually touched it — never assume a disruption broke something.
+        //    actually touched it. Never assume a disruption broke something.
         const brokeCurrentPlan = result.invalidatedPlans.some((p) => p.familyId === familyId);
         if (hadPlan && brokeCurrentPlan) {
           setPhase("route-broken");
-          await sleep(BEAT * 2.2);
+          /* The banner has to be *read*, not glimpsed: ~1.2s of hold, minus the
+             ~280ms it spends animating in, leaves a full second on the line
+             "Current plan compromised". Purely a presentation beat. */
+          await sleep(BEAT * 2.9);
           if (!mounted.current) return;
           setPhase("recalculating");
           await sleep(BEAT);

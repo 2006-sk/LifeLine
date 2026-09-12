@@ -17,6 +17,11 @@ export interface PanelProps {
   noPadding?: boolean;
 }
 
+/**
+ * Tone is carried by a 2px lit rail across the top edge of the enclosure --
+ * the flag on a filing tab. It is never the only signal: a toned panel always
+ * carries a StatusPill or a glyph in its header too.
+ */
 const toneAccentClass: Record<PanelTone, string> = {
   neutral: "",
   danger: "border-t-2 border-t-danger",
@@ -24,7 +29,15 @@ const toneAccentClass: Record<PanelTone, string> = {
   safe: "border-t-2 border-t-safe",
 };
 
-/** Glass command panel: the base surface every console module sits in. */
+/**
+ * The command panel: the base enclosure every console module sits in.
+ *
+ * The visual weight lives in `.panel` (globals.css) -- a lit top edge, an
+ * inner bezel line at a concentric radius, a contact shadow and an ambient
+ * shadow. Deliberately opaque: panels hold scrolling content, and a
+ * backdrop-filter behind a scroll container repaints the whole stacking
+ * context every frame. Fixed chrome uses `.chrome-blur` instead.
+ */
 export function Panel({
   title,
   eyebrow,
@@ -43,12 +56,12 @@ export function Panel({
         <header className="panel-header">
           <div className="flex min-w-0 flex-col gap-1">
             {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-            {title && <h3 className="truncate text-sm font-semibold text-text-primary">{title}</h3>}
+            {title && <h3 className="truncate text-heading text-text-primary">{title}</h3>}
           </div>
           {right && <div className="flex shrink-0 items-center gap-2">{right}</div>}
         </header>
       )}
-      <div className={cn(noPadding ? undefined : "p-5", bodyClassName)}>{children}</div>
+      <div className={cn(noPadding ? undefined : "p-panel", bodyClassName)}>{children}</div>
     </section>
   );
 }

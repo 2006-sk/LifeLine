@@ -43,7 +43,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium leading-none",
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-label font-medium",
         toneClasses[tone],
         className,
       )}
@@ -57,9 +57,10 @@ export function Chip({
           onClick={onRemove}
           aria-label={resolvedRemoveLabel}
           className={cn(
-            "-mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full opacity-70",
-            "transition-opacity hover:bg-white/10 hover:opacity-100",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base",
+            "-mr-1 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full opacity-70",
+            "transition-[background-color,opacity,transform] duration-[140ms] ease-out",
+            "hover:bg-white/10 hover:opacity-100 active:scale-[0.92]",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
           )}
         >
           <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" aria-hidden="true">

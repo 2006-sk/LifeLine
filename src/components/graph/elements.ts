@@ -1,6 +1,7 @@
 import type { Collection, CollectionReturnValue, Core, ElementDefinition } from "cytoscape";
 import type { GraphEdge, GraphNode, GraphNodeType, GraphPayload } from "@/lib/types";
 import { visualFor } from "./nodeVisuals";
+import { DEMO_FAMILY_ID } from "@/lib/world/world";
 
 /**
  * Payload -> cytoscape plumbing.
@@ -299,6 +300,13 @@ export function pickFocusNode(
 
   const families = index.byType.get("family");
   if (families && families.length > 0) {
+    // Before any plan exists there is no path to focus on, but the deployment
+    // still knows WHICH household it is monitoring. Falling back to an
+    // alphabetical sort here picked family_gurung over family_sharma purely
+    // because "g" sorts before "s", so the idle graph centred on a bystander
+    // household while the rest of the app talked about the Sharmas.
+    const monitored = families.find((f) => f.id === DEMO_FAMILY_ID);
+    if (monitored) return monitored.id;
     return [...families].sort((a, b) => (a.id < b.id ? -1 : 1))[0].id;
   }
   return index.nodes[0]?.id ?? null;

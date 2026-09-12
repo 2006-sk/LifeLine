@@ -1,70 +1,92 @@
 import Link from "next/link";
 import { HeroBackdrop } from "@/components/command/HeroBackdrop";
 import { LifelineMark } from "@/components/command/Header";
+import { world } from "@/lib/world/world";
+
+/* Entrance choreography. Four beats, weighted fade-up, ease-out. Kept here
+   rather than in globals.css because the hero owns it; React 19 hoists a
+   <style href precedence> into <head> and dedupes it. Reduced motion gets a
+   short opacity crossfade, not a dead page. */
+const heroMotion = `
+@keyframes lfl-rise { from { opacity: 0; transform: translate3d(0, 20px, 0); } to { opacity: 1; transform: none; } }
+@keyframes lfl-appear { from { opacity: 0; } to { opacity: 1; } }
+.lfl-rise { animation: lfl-rise 720ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .lfl-rise { animation: lfl-appear 150ms linear both; animation-delay: 0ms !important; }
+}
+`;
+
+const [lng, lat] = world.district.center;
+const sheetRef = `${lat.toFixed(4)}°N · ${lng.toFixed(4)}°E`;
 
 export default function Home() {
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden bg-surface-base">
+    <main className="relative isolate flex min-h-[100dvh] flex-col overflow-x-clip bg-surface-base">
+      <style href="lifeline-hero" precedence="default">
+        {heroMotion}
+      </style>
+
       <HeroBackdrop />
 
-      <div className="relative z-10 flex flex-1 flex-col">
-        <header className="flex items-center gap-3 px-6 py-5 sm:px-10">
-          <LifelineMark size={28} />
-          <span className="text-[15px] font-semibold tracking-[0.02em] text-text-primary">Lifeline</span>
-          <span className="ml-auto rounded-full border border-hairline px-3 py-1 text-[11px] tracking-[0.14em] text-text-tertiary uppercase">
-            Simulation environment
-          </span>
+      <div className="relative z-10 flex min-h-[100dvh] flex-col px-6 sm:px-10 lg:px-14">
+        {/* Masthead. The hairline breaks the page margin and runs off the right
+            edge into the plate -- the one deliberate escape from the grid. */}
+        <header className="lfl-rise pt-7 sm:pt-9">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <div className="flex items-center gap-3">
+              <LifelineMark size={26} />
+              <span className="text-[clamp(1.05rem,1.6vw,1.35rem)] leading-none font-semibold tracking-[0.3em] text-text-primary">
+                LIFELINE
+              </span>
+            </div>
+            <p className="font-mono text-[10px] tracking-[0.2em] text-text-tertiary uppercase">
+              Simulation environment · Bagmati West<span className="hidden sm:inline"> · {sheetRef}</span>
+            </p>
+          </div>
+          <div className="mt-5 -mr-6 border-t border-hairline sm:-mr-10 lg:-mr-14" />
         </header>
 
-        <div className="flex flex-1 items-center px-6 sm:px-10">
-          <div className="max-w-3xl">
-            <p className="text-[12px] tracking-[0.22em] text-accent uppercase">Disaster Response Intelligence</p>
-            <h1 className="mt-4 text-[clamp(3rem,9vw,6.5rem)] leading-[0.92] font-semibold tracking-[-0.03em] text-text-primary">
-              LIFELINE
-            </h1>
-            <p className="mt-5 max-w-xl text-[clamp(1.05rem,2.2vw,1.5rem)] leading-snug text-text-secondary">
-              Find the safest path that still exists.
-            </p>
-            <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-text-tertiary">
-              In a disaster, people don’t need more information. They need a route that is still open, transport that
-              fits their needs, a shelter with room, and medicine within reach — all at once. Lifeline keeps those
-              relationships in a live graph and recomputes the answer every time the world changes.
+        {/* Hero. Headline hangs on the page margin; the lede and the actions
+            step in to a second axis, so nothing reads as one stacked column. */}
+        <div className="flex flex-1 flex-col justify-center pt-14 pb-10 sm:pt-20">
+          <h1
+            className="lfl-rise max-w-[15ch] text-[clamp(2.35rem,5.6vw,4.15rem)] leading-[1.06] font-semibold tracking-[-0.03em] text-text-primary"
+            style={{ animationDelay: "90ms" }}
+          >
+            Find the safest path that still exists.
+          </h1>
+
+          <div className="lfl-rise md:pl-[clamp(2rem,9vw,8rem)]" style={{ animationDelay: "180ms" }}>
+            <p className="mt-7 max-w-[46ch] text-[15px] leading-relaxed text-text-secondary sm:text-[16px]">
+              In a disaster nobody needs more information. They need a road that is open, and a responder who can
+              actually reach them.
             </p>
 
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="/command?demo=1"
-                className="rounded-[var(--radius-md)] bg-accent px-6 py-3.5 text-[14px] font-semibold text-surface-base transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base focus-visible:outline-none"
+                className="rounded-[var(--radius-md)] bg-accent px-6 py-3.5 text-[14px] font-semibold whitespace-nowrap text-surface-base transition-[background-color,transform] duration-150 ease-out hover:bg-accent/85 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent"
               >
                 Run flood demo
               </Link>
               <Link
                 href="/command"
-                className="rounded-[var(--radius-md)] border border-hairline-strong px-6 py-3.5 text-[14px] font-semibold text-text-primary transition-colors hover:border-accent/60 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                className="rounded-[var(--radius-md)] border border-hairline-strong px-6 py-3.5 text-[14px] font-semibold whitespace-nowrap text-text-primary transition-[color,border-color,transform] duration-150 ease-out hover:border-accent/60 hover:text-accent active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent"
               >
                 Enter disaster command center
               </Link>
             </div>
-
-            <dl className="mt-12 grid max-w-2xl grid-cols-2 gap-x-8 gap-y-4 border-t border-hairline pt-6 sm:grid-cols-4">
-              {[
-                ["20", "locations"],
-                ["26", "roads & bridges"],
-                ["7", "responders"],
-                ["4", "shelters"],
-              ].map(([value, label]) => (
-                <div key={label}>
-                  <dt className="tabular text-2xl font-semibold text-text-primary">{value}</dt>
-                  <dd className="text-[11px] tracking-[0.14em] text-text-tertiary uppercase">{label}</dd>
-                </div>
-              ))}
-            </dl>
           </div>
         </div>
 
-        <footer className="px-6 pb-6 sm:px-10">
-          <p className="max-w-3xl text-[12px] leading-relaxed text-text-tertiary">
-            Lifeline is decision-support for disaster-response coordination, not an authoritative emergency service.
+        {/* Safety notice. Substance is fixed by the ethics requirement; only the
+            typography changes. Kept at 12px on text-tertiary, which is the
+            smallest size that still clears WCAG AA against surface-base. */}
+        <footer className="lfl-rise border-t border-hairline pt-5 pb-7" style={{ animationDelay: "270ms" }}>
+          <p className="max-w-[80ch] text-[12px] leading-relaxed text-text-tertiary">
+            <span className="text-text-secondary">
+              Lifeline is decision-support for disaster-response coordination, not an authoritative emergency service.
+            </span>{" "}
             All locations, resources and incidents shown are synthetic simulation data. Conditions may change. Follow
             official emergency instructions when available, and call local emergency services for immediate
             life-threatening danger.

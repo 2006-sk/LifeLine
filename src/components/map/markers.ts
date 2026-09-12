@@ -151,14 +151,28 @@ export function createLocationMarker(loc: WorldLocation, showName = true): Marke
 }
 
 /** The household we are routing. Distinct pin plus a slow pulsing ring. */
-export function createFamilyMarker(family: WorldFamily): MarkerSpec | null {
+/**
+ * The map shows every monitored household, but only ONE of them is the subject
+ * of the current plan. Without a distinction the routed home is visually
+ * identical to its neighbours and a viewer cannot tell whose route they are
+ * looking at, which is exactly the confusion this marks away.
+ */
+export function createFamilyMarker(family: WorldFamily, subjectId?: string): MarkerSpec | null {
   const loc = locationById.get(family.locationId);
   if (!loc) return null;
-  const el = root("family", family.id, `${family.name}, ${family.size} people, at ${loc.name}`);
+  const isSubject = subjectId === family.id;
+  const el = root(
+    "family",
+    family.id,
+    `${family.name}, ${family.size} people, at ${loc.name}${isSubject ? " — household this plan is for" : ""}`,
+    isSubject ? "is-subject" : "",
+  );
   el.innerHTML =
     `<span class="lfl-pulse-ring" aria-hidden="true"></span>` +
     `<span class="lfl-pin lfl-pin--family">${GLYPH.home}</span>` +
-    `<span class="lfl-chip">${escapeHtml(family.name)} · ${family.size}</span>`;
+    `<span class="lfl-chip">${escapeHtml(family.name)} · ${family.size}` +
+    (isSubject ? `<span class="lfl-chip-tag">this plan</span>` : "") +
+    `</span>`;
   return {
     id: family.id,
     kind: "family",
@@ -293,7 +307,7 @@ export function createHazardMarker(hazard: WorldHazard, at: Pos): MarkerSpec {
 }
 
 /** Every marker that exists regardless of the current scenario. */
-export function buildStaticMarkers(): MarkerSpec[] {
+export function buildStaticMarkers(subjectFamilyId?: string): MarkerSpec[] {
   const specs: MarkerSpec[] = [];
   // Locations whose name is already printed by a shelter/clinic card.
   const alreadyNamed = new Set<string>([
@@ -316,7 +330,7 @@ export function buildStaticMarkers(): MarkerSpec[] {
     if (spec) specs.push(spec);
   }
   for (const family of world.families) {
-    const spec = createFamilyMarker(family);
+    const spec = createFamilyMarker(family, subjectFamilyId);
     if (spec) specs.push(spec);
   }
   return specs;
